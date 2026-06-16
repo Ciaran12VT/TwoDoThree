@@ -1,0 +1,73 @@
+<UserControl x:Class="TwoDoThree.Controls.ActionListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:TwoDoThree.Converters">
+    <UserControl.Resources>
+        <converters:ActionStatusToBrushConverter x:Key="ActionStatusToBrushConverter" />
+        <converters:IndentToMarginConverter x:Key="IndentToMarginConverter" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="0,0,0,8">
+            <TextBlock Text="Action List"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+            <Button DockPanel.Dock="Right"
+                    Width="100"
+                    Height="30"
+                    Content="Add Action"
+                    Command="{Binding AddActionCommand}" />
+        </DockPanel>
+
+        <DataGrid x:Name="ActionsGrid"
+                  Grid.Row="1"
+                  ItemsSource="{Binding Actions}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  RowHeaderWidth="0"
+                  SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="ActionNumber"
+                                    Width="120"
+                                    IsReadOnly="True"
+                                    Binding="{Binding ActionNumber}" />
+                <DataGridTemplateColumn Header="ActionText" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border Margin="{Binding IndentLevel, Converter={StaticResource IndentToMarginConverter}}"
+                                    Padding="6"
+                                    Background="{Binding Status, Converter={StaticResource ActionStatusToBrushConverter}}"
+                                    BorderBrush="#D1D5DB"
+                                    BorderThickness="1">
+                                <TextBox Text="{Binding ActionText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         TextWrapping="Wrap"
+                                         MinHeight="24" />
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="ActionOptions" Width="130">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="Options"
+                                    Width="88"
+                                    Height="28"
+                                    Click="ActionOptionsButton_Click" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>
