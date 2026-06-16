@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using TwoDoThree.Controls;
 using TwoDoThree.Models;
+using TwoDoThree.Services;
 using TwoDoThree.ViewModels;
 using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
@@ -32,10 +33,29 @@ public partial class TaskDetailWindow : Window
     private GridLength expandedResourcePaneWidth = new(292);
     private GridLength expandedResourceSectionHeight = new(3, GridUnitType.Star);
 
-    public TaskDetailWindow(TaskItem task, TagSettings tagSettings)
+    public TaskDetailWindow(
+        TaskItem task,
+        TagSettings tagSettings,
+        Surf2IntegrationSettings surf2Settings,
+        ISurf2IntegrationService surf2IntegrationService,
+        ISurf2Launcher surf2Launcher)
     {
         InitializeComponent();
-        DataContext = new TaskDetailViewModel(task, tagSettings);
+        DataContext = new TaskDetailViewModel(
+            task,
+            tagSettings,
+            surf2Settings,
+            surf2IntegrationService,
+            surf2Launcher);
+        Loaded += TaskDetailWindow_Loaded;
+    }
+
+    private async void TaskDetailWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is TaskDetailViewModel viewModel)
+        {
+            await viewModel.InitializeSurf2Async();
+        }
     }
 
     private void ResourceTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -49,6 +69,11 @@ public partial class TaskDetailWindow : Window
         item.IsSelected = true;
         item.Focus();
         viewModel.SelectedResource = resource;
+        if (resource.Kind == ResourceKind.SurfResource)
+        {
+            viewModel.OpenLinkedResource(resource);
+        }
+
         e.Handled = true;
     }
 

@@ -5,6 +5,8 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using TwoDoThree.Models;
+using TwoDoThree.Services;
+using TwoDoThree.Views;
 
 namespace TwoDoThree.ViewModels;
 
@@ -13,19 +15,37 @@ public sealed class TaskDetailViewModel : ObservableObject
     private ResourceItem? selectedResource;
     private ActionItem? selectedAction;
     private string resourceSearchText = string.Empty;
+    private readonly Surf2IntegrationSettings surf2Settings;
+    private readonly ISurf2IntegrationService surf2IntegrationService;
+    private readonly ISurf2Launcher surf2Launcher;
+    private Surf2ScopeOption? selectedSurfScope;
+    private IReadOnlyList<Surf2ResourceCandidate> surfResources = [];
+    private string loadedSurfResourceScopeId = string.Empty;
+    private string surf2Status = string.Empty;
+    private bool isInitializingSurfScope;
+    private bool isLoadingSurfResources;
 
-    public TaskDetailViewModel(TaskItem task, TagSettings tagSettings)
+    public TaskDetailViewModel(
+        TaskItem task,
+        TagSettings tagSettings,
+        Surf2IntegrationSettings surf2Settings,
+        ISurf2IntegrationService surf2IntegrationService,
+        ISurf2Launcher surf2Launcher)
     {
         Task = task;
         TagSettings = tagSettings;
+        this.surf2Settings = surf2Settings;
+        this.surf2IntegrationService = surf2IntegrationService;
+        this.surf2Launcher = surf2Launcher;
         AddTextResourceCommand = new RelayCommand(_ => AddTextResource());
         AddSheetResourceCommand = new RelayCommand(_ => AddSheetResource());
         AddCodeResourceCommand = new RelayCommand(_ => AddCodeResource());
         AddImageResourceCommand = new RelayCommand(_ => AddImageResource());
         AddAudioResourceCommand = new RelayCommand(_ => AddFileResource(ResourceKind.Audio));
-        AddSurfResourceCommand = new RelayCommand(_ => AddSurfResource());
+        AddSurfResourceCommand = new RelayCommand(async _ => await AddSurfResourceAsync(), _ => CanAddSurfResource);
         SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null);
         AddActionCommand = new RelayCommand(_ => AddAction());
+        RefreshSurfScopesCommand = new RelayCommand(async _ => await InitializeSurf2Async());
 
         RefreshResourceGroups();
         RenumberActions(Task.Actions);
@@ -42,6 +62,8 @@ public sealed class TaskDetailViewModel : ObservableObject
     public ObservableCollection<ActionItem> Actions => Task.Actions;
 
     public ObservableCollection<ResourceGroup> ResourceGroups { get; } = new();
+
+    public ObservableCollection<Surf2ScopeOption> SurfScopes { get; } = new();
 
     public ActionItem? SelectedAction
     {
@@ -74,6 +96,43 @@ public sealed class TaskDetailViewModel : ObservableObject
         }
     }
 
+    public bool IsSurf2IntegrationAvailable => surf2Settings.IsConfigured;
+
+    public bool CanAddSurfResource => IsSurf2IntegrationAvailable && SelectedSurfScope is not null && !isLoadingSurfResources;
+
+    public Surf2ScopeOption? SelectedSurfScope
+    {
+        get => selectedSurfScope;
+        set
+        {
+            if (!SetProperty(ref selectedSurfScope, value))
+            {
+                return;
+            }
+
+            loadedSurfResourceScopeId = string.Empty;
+            surfResources = [];
+            RaiseSurfResourceStateChanged();
+
+            if (!isInitializingSurfScope)
+            {
+                Task.SurfScopeId = value?.ScopeId ?? string.Empty;
+                Task.SurfScopeName = value?.Name ?? string.Empty;
+                TouchTask();
+                if (value is not null)
+                {
+                    _ = LoadSurfResourcesForSelectedScopeAsync();
+                }
+            }
+        }
+    }
+
+    public string Surf2Status
+    {
+        get => surf2Status;
+        set => SetProperty(ref surf2Status, value);
+    }
+
     public ICommand AddTextResourceCommand { get; }
 
     public ICommand AddSheetResourceCommand { get; }
@@ -90,6 +149,8 @@ public sealed class TaskDetailViewModel : ObservableObject
 
     public ICommand AddActionCommand { get; }
 
+    public ICommand RefreshSurfScopesCommand { get; }
+
     public void RefreshResourceGroups(ResourceItem? preferredResource = null)
     {
         var resourceToSelect = preferredResource ?? SelectedResource;
@@ -99,6 +160,201 @@ public sealed class TaskDetailViewModel : ObservableObject
         SelectedResource = resourceToSelect is not null && Task.Resources.Contains(resourceToSelect)
             ? resourceToSelect
             : Task.Resources.FirstOrDefault();
+    }
+
+    public async Task InitializeSurf2Async()
+    {
+        isInitializingSurfScope = true;
+        try
+        {
+            SurfScopes.Clear();
+            SelectedSurfScope = null;
+        }
+        finally
+        {
+            isInitializingSurfScope = false;
+        }
+
+        surfResources = [];
+        loadedSurfResourceScopeId = string.Empty;
+
+        if (!IsSurf2IntegrationAvailable)
+        {
+            Surf2Status = "Surf2 integration is disabled.";
+            RaiseSurfResourceStateChanged();
+            return;
+        }
+
+        try
+        {
+            Surf2Status = "Loading Surf2 scopes...";
+            IReadOnlyList<Surf2ScopeOption> scopes = await surf2IntegrationService.LoadScopesAsync(
+                surf2Settings,
+                CancellationToken.None);
+            foreach (Surf2ScopeOption scope in scopes)
+            {
+                SurfScopes.Add(scope);
+            }
+
+            isInitializingSurfScope = true;
+            try
+            {
+                SelectedSurfScope = SurfScopes.FirstOrDefault(scope =>
+                    string.Equals(scope.ScopeId, Task.SurfScopeId, StringComparison.OrdinalIgnoreCase));
+            }
+            finally
+            {
+                isInitializingSurfScope = false;
+            }
+
+            Surf2Status = SurfScopes.Count == 0
+                ? "No Surf2 scopes were found."
+                : $"{SurfScopes.Count} Surf2 scope{(SurfScopes.Count == 1 ? string.Empty : "s")} available.";
+
+            if (SelectedSurfScope is not null)
+            {
+                await LoadSurfResourcesForSelectedScopeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Surf2Status = $"Could not load Surf2 scopes: {ex.Message}";
+        }
+        finally
+        {
+            RaiseSurfResourceStateChanged();
+        }
+    }
+
+    public async Task<IReadOnlyList<Surf2ResourceCandidate>> GetSurfResourcesForInsertionAsync()
+    {
+        await LoadSurfResourcesForSelectedScopeAsync();
+        return surfResources;
+    }
+
+    public ResourceItem GetOrCreateSurfResource(Surf2ResourceCandidate candidate)
+    {
+        ResourceItem? existing = Task.Resources.FirstOrDefault(resource =>
+            resource.Kind == ResourceKind.SurfResource &&
+            SurfResourceLink.TryParse(resource.Content, out SurfResourceLink link) &&
+            link.Matches(candidate));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var resource = new ResourceItem
+        {
+            Name = CreateUniqueResourceName(candidate.Name),
+            Kind = ResourceKind.SurfResource,
+            Content = SurfResourceLink.FromCandidate(candidate).ToJson()
+        };
+        AddResource(resource);
+        return resource;
+    }
+
+    public void OpenLinkedResource(ResourceItem resource)
+    {
+        if (resource.Kind == ResourceKind.SurfResource)
+        {
+            _ = OpenSurfResourceAsync(resource);
+            return;
+        }
+
+        SelectedResource = resource;
+    }
+
+    private async Task LoadSurfResourcesForSelectedScopeAsync()
+    {
+        if (!IsSurf2IntegrationAvailable || SelectedSurfScope is null)
+        {
+            surfResources = [];
+            loadedSurfResourceScopeId = string.Empty;
+            RaiseSurfResourceStateChanged();
+            return;
+        }
+
+        if (string.Equals(loadedSurfResourceScopeId, SelectedSurfScope.ScopeId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        isLoadingSurfResources = true;
+        RaiseSurfResourceStateChanged();
+
+        try
+        {
+            Surf2Status = $"Loading Surf2 resources for {SelectedSurfScope.DisplayName}...";
+            surfResources = await surf2IntegrationService.LoadResourcesAsync(
+                surf2Settings,
+                SelectedSurfScope.ScopeId,
+                CancellationToken.None);
+            loadedSurfResourceScopeId = SelectedSurfScope.ScopeId;
+            Surf2Status = $"{surfResources.Count} Surf2 resource{(surfResources.Count == 1 ? string.Empty : "s")} available for {SelectedSurfScope.DisplayName}.";
+        }
+        catch (Exception ex)
+        {
+            surfResources = [];
+            loadedSurfResourceScopeId = string.Empty;
+            Surf2Status = $"Could not load Surf2 resources: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingSurfResources = false;
+            RaiseSurfResourceStateChanged();
+        }
+    }
+
+    private async Task AddSurfResourceAsync()
+    {
+        IReadOnlyList<Surf2ResourceCandidate> resources = await GetSurfResourcesForInsertionAsync();
+        if (SelectedSurfScope is null)
+        {
+            Surf2Status = "Choose a Surf2 scope first.";
+            return;
+        }
+
+        if (resources.Count == 0)
+        {
+            Surf2Status = $"No Surf2 resources are available for {SelectedSurfScope.DisplayName}.";
+            return;
+        }
+
+        var picker = new SurfResourcePickerWindow(resources)
+        {
+            Owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+        };
+        if (picker.ShowDialog() == true && picker.SelectedResource is not null)
+        {
+            ResourceItem resource = GetOrCreateSurfResource(picker.SelectedResource);
+            SelectedResource = resource;
+            Surf2Status = $"Added Surf2 resource '{resource.Name}'.";
+        }
+    }
+
+    private async Task OpenSurfResourceAsync(ResourceItem resource)
+    {
+        if (!SurfResourceLink.TryParse(resource.Content, out SurfResourceLink link))
+        {
+            Surf2Status = "This Surf resource is missing its target details.";
+            return;
+        }
+
+        try
+        {
+            Surf2Status = $"Opening '{resource.Name}' in Surf2...";
+            await surf2Launcher.OpenResourceAsync(surf2Settings, link, CancellationToken.None);
+            Surf2Status = $"Requested Surf2 resource '{resource.Name}'.";
+        }
+        catch (Exception ex)
+        {
+            Surf2Status = $"Could not open Surf2 resource: {ex.Message}";
+            MessageBox.Show(
+                Surf2Status,
+                "Surf2",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     public void SetTaskStatus(TwoDoThree.Models.TaskStatus status, string statusMessage = "")
@@ -489,21 +745,43 @@ public sealed class TaskDetailViewModel : ObservableObject
         });
     }
 
-    private void AddSurfResource()
-    {
-        AddResource(new ResourceItem
-        {
-            Name = $"Surf resource {Task.Resources.Count(r => r.Kind == ResourceKind.SurfResource) + 1}",
-            Kind = ResourceKind.SurfResource,
-            Content = "Surf resource placeholder"
-        });
-    }
-
     private void AddResource(ResourceItem resource)
     {
         Task.Resources.Add(resource);
         RefreshResourceGroups(resource);
         TouchTask();
+    }
+
+    private string CreateUniqueResourceName(string preferredName)
+    {
+        string baseName = string.IsNullOrWhiteSpace(preferredName)
+            ? $"Surf resource {Task.Resources.Count(r => r.Kind == ResourceKind.SurfResource) + 1}"
+            : preferredName.Trim();
+        if (!Task.Resources.Any(resource => string.Equals(resource.Name, baseName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return baseName;
+        }
+
+        for (int suffix = 2; suffix < int.MaxValue; suffix++)
+        {
+            string candidate = $"{baseName} ({suffix})";
+            if (!Task.Resources.Any(resource => string.Equals(resource.Name, candidate, StringComparison.OrdinalIgnoreCase)))
+            {
+                return candidate;
+            }
+        }
+
+        return $"{baseName} {Guid.NewGuid():N}";
+    }
+
+    private void RaiseSurfResourceStateChanged()
+    {
+        OnPropertyChanged(nameof(IsSurf2IntegrationAvailable));
+        OnPropertyChanged(nameof(CanAddSurfResource));
+        if (AddSurfResourceCommand is RelayCommand addSurfResourceCommand)
+        {
+            addSurfResourceCommand.RaiseCanExecuteChanged();
+        }
     }
 
     private void RebuildResourceGroups()

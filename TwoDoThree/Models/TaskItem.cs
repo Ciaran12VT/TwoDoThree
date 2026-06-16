@@ -15,6 +15,8 @@ public sealed class TaskItem : ObservableObject
     private DateTime createdOn = DateTime.Now;
     private DateTime updatedOn = DateTime.Now;
     private TimeSpan timeSpent;
+    private string surfScopeId = string.Empty;
+    private string surfScopeName = string.Empty;
 
     public int Id
     {
@@ -88,6 +90,30 @@ public sealed class TaskItem : ObservableObject
     {
         get => timeSpent;
         set => SetProperty(ref timeSpent, value);
+    }
+
+    public string SurfScopeId
+    {
+        get => surfScopeId;
+        set
+        {
+            if (SetProperty(ref surfScopeId, value))
+            {
+                UpdatedOn = DateTime.Now;
+            }
+        }
+    }
+
+    public string SurfScopeName
+    {
+        get => surfScopeName;
+        set
+        {
+            if (SetProperty(ref surfScopeName, value))
+            {
+                UpdatedOn = DateTime.Now;
+            }
+        }
     }
 
     public ObservableCollection<ResourceItem> Resources { get; } = new();

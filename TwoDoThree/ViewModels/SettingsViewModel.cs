@@ -9,6 +9,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string selectedSection = "Email";
     private string connectionStatus = string.Empty;
     private string storageStatus = string.Empty;
+    private string surf2Status = string.Empty;
 
     public SettingsViewModel(AppSettings settings)
     {
@@ -29,11 +30,20 @@ public sealed class SettingsViewModel : ObservableObject
         {
             ConnectionString = settings.Database.ConnectionString
         };
-        Sections = new ObservableCollection<string> { "Email", "Tags", "Storage" };
+        Surf2 = new Surf2IntegrationSettings
+        {
+            IsEnabled = settings.Surf2.IsEnabled,
+            ConnectionString = settings.Surf2.ConnectionString,
+            ExecutablePath = settings.Surf2.ExecutablePath
+        };
+        Sections = new ObservableCollection<string> { "Email", "Tags", "Storage", "Surf2" };
         ConnectionStatus = GetDefaultConnectionStatus();
         StorageStatus = Database.IsConfigured
             ? "SQL Server connection string configured."
             : "Enter a SQL Server connection string to enable task persistence.";
+        Surf2Status = Surf2.IsConfigured
+            ? "Surf2 integration configured."
+            : "Enable Surf2 and enter its database connection string.";
         Email.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(EmailSettings.Source))
@@ -48,6 +58,8 @@ public sealed class SettingsViewModel : ObservableObject
     public TagManagerViewModel TagManager { get; }
 
     public DatabaseSettings Database { get; }
+
+    public Surf2IntegrationSettings Surf2 { get; }
 
     public IReadOnlyList<EmailSource> EmailSourceValues { get; } = Enum.GetValues<EmailSource>();
 
@@ -71,6 +83,12 @@ public sealed class SettingsViewModel : ObservableObject
         set => SetProperty(ref storageStatus, value);
     }
 
+    public string Surf2Status
+    {
+        get => surf2Status;
+        set => SetProperty(ref surf2Status, value);
+    }
+
     public void Apply()
     {
         settings.Email.AccountAddress = Email.AccountAddress;
@@ -82,6 +100,9 @@ public sealed class SettingsViewModel : ObservableObject
         settings.Email.UseWindowsAuthentication = Email.UseWindowsAuthentication;
         settings.Email.MaxInboxMessages = Email.MaxInboxMessages;
         settings.Database.ConnectionString = Database.ConnectionString;
+        settings.Surf2.IsEnabled = Surf2.IsEnabled;
+        settings.Surf2.ConnectionString = Surf2.ConnectionString;
+        settings.Surf2.ExecutablePath = Surf2.ExecutablePath;
         TagManager.ApplyTo(settings.Tags);
     }
 

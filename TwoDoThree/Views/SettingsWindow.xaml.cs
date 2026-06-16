@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Identity.Client;
+using Microsoft.Win32;
 using TwoDoThree.Models;
 using TwoDoThree.Services;
 using TwoDoThree.ViewModels;
@@ -12,6 +13,7 @@ public partial class SettingsWindow : Window
     private readonly IAppSettingsStore settingsStore;
     private readonly IGraphAuthService graphAuthService;
     private readonly IEmailCacheStore emailCacheStore;
+    private readonly ISurf2IntegrationService surf2IntegrationService = new Surf2IntegrationService();
 
     public SettingsWindow(
         AppSettings settings,
@@ -149,6 +151,46 @@ public partial class SettingsWindow : Window
         catch (Exception ex)
         {
             viewModel.StorageStatus = $"SQL Server connection failed: {ex.Message}";
+        }
+    }
+
+    private void BrowseSurf2ExecutableButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select Surf2 executable",
+            Filter = "Surf2 executable|Surf2.exe|Executable files|*.exe|All files|*.*",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            viewModel.Surf2.ExecutablePath = dialog.FileName;
+        }
+    }
+
+    private async void TestSurf2Button_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.Surf2Status = "Testing Surf2 connection...";
+        try
+        {
+            viewModel.Surf2Status = await surf2IntegrationService.TestConnectionAsync(
+                viewModel.Surf2,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            viewModel.Surf2Status = $"Surf2 connection failed: {ex.Message}";
         }
     }
 

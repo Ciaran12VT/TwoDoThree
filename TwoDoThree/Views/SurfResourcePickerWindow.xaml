@@ -1,0 +1,63 @@
+<Window x:Class="TwoDoThree.Views.SurfResourcePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:TwoDoThree.Models"
+        Title="Add Surf Resource"
+        Icon="../Assets/AppIcon.ico"
+        Height="520"
+        Width="760"
+        MinHeight="380"
+        MinWidth="560"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBox x:Name="SearchTextBox"
+                 Margin="0,0,0,10"
+                 ToolTip="Filter Surf resources"
+                 TextChanged="SearchTextBox_TextChanged"
+                 KeyDown="SearchTextBox_KeyDown" />
+
+        <ListBox x:Name="ResourceListBox"
+                 Grid.Row="1"
+                 ItemsSource="{Binding}"
+                 MouseDoubleClick="ResourceListBox_MouseDoubleClick"
+                 KeyDown="ResourceListBox_KeyDown">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type models:Surf2ResourceCandidate}">
+                    <Grid Margin="4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{Binding Name}"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,3,0,0"
+                                   Text="{Binding DisplaySummary}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel Grid.Row="2"
+                    Margin="0,12,0,0"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="84"
+                    Content="Cancel"
+                    Click="CancelButton_Click" />
+            <Button Width="84"
+                    Margin="8,0,0,0"
+                    Content="Add"
+                    Click="AddButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

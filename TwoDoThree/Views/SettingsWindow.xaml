@@ -412,6 +412,86 @@
                                        Text="{Binding StorageStatus}"
                                        TextWrapping="Wrap" />
                         </Grid>
+
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="{x:Type Grid}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedSection}" Value="Surf2">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.ColumnSpan="2"
+                                       Text="Surf2"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,18" />
+
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Content="Enable Surf2 integration"
+                                      IsChecked="{Binding Surf2.IsEnabled}" />
+
+                            <TextBlock Grid.Row="2"
+                                       Text="Connection string"
+                                       VerticalAlignment="Top"
+                                       Margin="0,14,0,0" />
+                            <TextBox Grid.Row="2"
+                                     Grid.Column="1"
+                                     Height="96"
+                                     Margin="0,14,0,0"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Text="{Binding Surf2.ConnectionString, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="3"
+                                       Text="Surf2 executable"
+                                       VerticalAlignment="Center"
+                                       Margin="0,14,0,0" />
+                            <DockPanel Grid.Row="3"
+                                       Grid.Column="1"
+                                       Margin="0,14,0,0">
+                                <Button DockPanel.Dock="Right"
+                                        Width="76"
+                                        Margin="8,0,0,0"
+                                        Content="Browse"
+                                        Click="BrowseSurf2ExecutableButton_Click" />
+                                <TextBox Text="{Binding Surf2.ExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <StackPanel Grid.Row="4"
+                                        Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        Margin="0,14,0,0">
+                                <Button Width="126"
+                                        Content="Test Connection"
+                                        Click="TestSurf2Button_Click" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="5"
+                                       Grid.Column="1"
+                                       Margin="0,8,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Text="{Binding Surf2Status}"
+                                       TextWrapping="Wrap" />
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>

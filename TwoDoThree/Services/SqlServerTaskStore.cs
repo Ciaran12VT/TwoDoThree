@@ -104,13 +104,25 @@ BEGIN
         CreatedOn datetime2 NOT NULL,
         UpdatedOn datetime2 NOT NULL,
         TimeSpentSeconds bigint NOT NULL,
-        SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0)
+        SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0),
+        SurfScopeId nvarchar(128) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SurfScopeId DEFAULT(N''),
+        SurfScopeName nvarchar(500) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SurfScopeName DEFAULT(N'')
     );
 END;
 
 IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SortOrder') IS NULL
 BEGIN
     ALTER TABLE dbo.TwoDoThreeTasks ADD SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0);
+END;
+
+IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SurfScopeId') IS NULL
+BEGIN
+    ALTER TABLE dbo.TwoDoThreeTasks ADD SurfScopeId nvarchar(128) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SurfScopeId DEFAULT(N'');
+END;
+
+IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SurfScopeName') IS NULL
+BEGIN
+    ALTER TABLE dbo.TwoDoThreeTasks ADD SurfScopeName nvarchar(500) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SurfScopeName DEFAULT(N'');
 END;
 
 IF OBJECT_ID(N'dbo.TwoDoThreeResources', N'U') IS NULL
@@ -186,7 +198,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeTasks_SortO
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-SELECT Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder
+SELECT Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName
 FROM dbo.TwoDoThreeTasks
 ORDER BY SortOrder, Id;
 """;
@@ -203,6 +215,8 @@ ORDER BY SortOrder, Id;
                 Title = ReadString(reader, "Title"),
                 Tags = ReadString(reader, "Tags"),
                 DueBy = ReadNullableDateTime(reader, "DueBy"),
+                SurfScopeId = ReadString(reader, "SurfScopeId"),
+                SurfScopeName = ReadString(reader, "SurfScopeName"),
                 CreatedOn = ReadDateTime(reader, "CreatedOn"),
                 UpdatedOn = ReadDateTime(reader, "UpdatedOn"),
                 TimeSpent = TimeSpan.FromSeconds(ReadLong(reader, "TimeSpentSeconds")),
@@ -325,10 +339,12 @@ WHEN MATCHED THEN
         CreatedOn = @CreatedOn,
         UpdatedOn = @UpdatedOn,
         TimeSpentSeconds = @TimeSpentSeconds,
-        SortOrder = @SortOrder
+        SortOrder = @SortOrder,
+        SurfScopeId = @SurfScopeId,
+        SurfScopeName = @SurfScopeName
 WHEN NOT MATCHED THEN
-    INSERT (Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder)
-    VALUES (@Id, @Title, @Tags, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds, @SortOrder);
+    INSERT (Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName)
+    VALUES (@Id, @Title, @Tags, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds, @SortOrder, @SurfScopeId, @SurfScopeName);
 """);
 
         AddParameter(command, "@Id", task.Id);
@@ -341,6 +357,8 @@ WHEN NOT MATCHED THEN
         AddParameter(command, "@UpdatedOn", task.UpdatedOn);
         AddParameter(command, "@TimeSpentSeconds", (long)Math.Floor(task.TimeSpent.TotalSeconds));
         AddParameter(command, "@SortOrder", task.SortOrder);
+        AddParameter(command, "@SurfScopeId", task.SurfScopeId);
+        AddParameter(command, "@SurfScopeName", task.SurfScopeName);
         command.ExecuteNonQuery();
     }
 

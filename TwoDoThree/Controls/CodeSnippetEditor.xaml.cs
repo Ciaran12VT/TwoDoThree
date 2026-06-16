@@ -153,6 +153,29 @@ public partial class CodeSnippetEditor : UserControl
         }
     }
 
+    private async void Editor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.I ||
+            (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != (ModifierKeys.Control | ModifierKeys.Alt))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (ResourceLinkHelper.FindTaskDetailViewModel(this) is not { } viewModel)
+        {
+            return;
+        }
+
+        IReadOnlyList<Surf2ResourceCandidate> resources = await viewModel.GetSurfResourcesForInsertionAsync();
+        SurfResourceIntellisensePopup.Open(Editor, resources, candidate =>
+        {
+            ResourceItem resource = viewModel.GetOrCreateSurfResource(candidate);
+            Editor.Focus();
+            Editor.Document.Insert(Editor.CaretOffset, ResourceLinkHelper.CreateToken(resource));
+        });
+    }
+
     private void LanguageMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem item || Resource is null)

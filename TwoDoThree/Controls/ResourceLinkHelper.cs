@@ -82,7 +82,7 @@ public static class ResourceLinkHelper
             return false;
         }
 
-        viewModel.SelectedResource = resource;
+        viewModel.OpenLinkedResource(resource);
         return true;
     }
 

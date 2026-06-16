@@ -32,6 +32,9 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
             ApplyEmail(settings.Email, snapshot.Email);
             settings.Tags.ReplaceTags(snapshot.Tags);
             settings.Database.ConnectionString = snapshot.Database.ConnectionString;
+            settings.Surf2.IsEnabled = snapshot.Surf2.IsEnabled;
+            settings.Surf2.ConnectionString = snapshot.Surf2.ConnectionString;
+            settings.Surf2.ExecutablePath = snapshot.Surf2.ExecutablePath;
         }
         catch (JsonException)
         {
@@ -52,7 +55,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         {
             Email = EmailSettingsSnapshot.From(settings.Email),
             Tags = settings.Tags.Tags.ToList(),
-            Database = DatabaseSettingsSnapshot.From(settings.Database)
+            Database = DatabaseSettingsSnapshot.From(settings.Database),
+            Surf2 = Surf2IntegrationSettingsSnapshot.From(settings.Surf2)
         };
 
         File.WriteAllText(
@@ -79,6 +83,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         public List<string> Tags { get; set; } = [];
 
         public DatabaseSettingsSnapshot Database { get; set; } = new();
+
+        public Surf2IntegrationSettingsSnapshot Surf2 { get; set; } = new();
     }
 
     private sealed class DatabaseSettingsSnapshot
@@ -90,6 +96,25 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
             return new DatabaseSettingsSnapshot
             {
                 ConnectionString = settings.ConnectionString
+            };
+        }
+    }
+
+    private sealed class Surf2IntegrationSettingsSnapshot
+    {
+        public bool IsEnabled { get; set; }
+
+        public string ConnectionString { get; set; } = string.Empty;
+
+        public string ExecutablePath { get; set; } = string.Empty;
+
+        public static Surf2IntegrationSettingsSnapshot From(Surf2IntegrationSettings settings)
+        {
+            return new Surf2IntegrationSettingsSnapshot
+            {
+                IsEnabled = settings.IsEnabled,
+                ConnectionString = settings.ConnectionString,
+                ExecutablePath = settings.ExecutablePath
             };
         }
     }

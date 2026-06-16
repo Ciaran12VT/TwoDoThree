@@ -66,6 +66,15 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
 
+        <Style x:Key="Surf2ScopeBarVisibilityStyle" TargetType="{x:Type FrameworkElement}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSurf2IntegrationAvailable}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <DataTemplate x:Key="TextResourceTemplate" DataType="{x:Type models:ResourceItem}">
             <controls:ResourceLinkRichTextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                               VerticalScrollBarVisibility="Auto"
@@ -278,6 +287,33 @@
         </Border>
 
         <DockPanel Grid.Row="1" Margin="0,0,0,8">
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Style="{StaticResource Surf2ScopeBarVisibilityStyle}">
+                <TextBlock Text="Surf Scope"
+                           Margin="0,0,8,0"
+                           VerticalAlignment="Center" />
+                <ComboBox Width="260"
+                          ItemsSource="{Binding SurfScopes}"
+                          SelectedItem="{Binding SelectedSurfScope, Mode=TwoWay}"
+                          DisplayMemberPath="DisplayName" />
+                <Button Width="30"
+                        Height="24"
+                        Margin="8,0,0,0"
+                        ToolTip="Refresh Surf scopes"
+                        Command="{Binding RefreshSurfScopesCommand}">
+                    <TextBlock Text="&#xE72C;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="13" />
+                </Button>
+                <TextBlock Width="260"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Text="{Binding Surf2Status}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
             <TextBlock Text="Resources"
                        FontSize="16"
                        FontWeight="SemiBold"

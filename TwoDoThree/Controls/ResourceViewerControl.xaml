@@ -96,10 +96,23 @@
             <Border BorderBrush="{StaticResource MutedBorderBrush}"
                     BorderThickness="1"
                     Background="#F9FAFB"
-                    Padding="16">
-                <TextBlock Text="{Binding Content}"
-                           TextWrapping="Wrap"
-                           Foreground="{StaticResource MutedTextBrush}" />
+                    Padding="16"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="SurfResource_MouseLeftButtonDown">
+                <StackPanel>
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,6,0,14"
+                               Text="{Binding SurfResourceSummary}"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedTextBrush}" />
+                    <Button Width="116"
+                            HorizontalAlignment="Left"
+                            Content="Open in Surf2"
+                            Click="OpenSurfResourceButton_Click" />
+                </StackPanel>
             </Border>
         </DataTemplate>
     </UserControl.Resources>

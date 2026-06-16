@@ -36,7 +36,14 @@ public sealed class ResourceItem : ObservableObject
     public string Content
     {
         get => content;
-        set => SetProperty(ref content, value);
+        set
+        {
+            if (SetProperty(ref content, value))
+            {
+                OnPropertyChanged(nameof(SurfResourcePath));
+                OnPropertyChanged(nameof(SurfResourceSummary));
+            }
+        }
     }
 
     public string FormattedContent
@@ -74,4 +81,14 @@ public sealed class ResourceItem : ObservableObject
         get => emailReceivedOn;
         set => SetProperty(ref emailReceivedOn, value);
     }
+
+    public string SurfResourcePath =>
+        SurfResourceLink.TryParse(Content, out SurfResourceLink link)
+            ? link.ResourcePath
+            : Content;
+
+    public string SurfResourceSummary =>
+        SurfResourceLink.TryParse(Content, out SurfResourceLink link)
+            ? link.DisplaySummary
+            : Content;
 }

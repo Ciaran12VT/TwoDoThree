@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private readonly IAppSettingsStore settingsStore;
     private readonly IEmailCacheStore emailCacheStore;
     private readonly IGraphAuthService graphAuthService;
+    private readonly ISurf2IntegrationService surf2IntegrationService;
+    private readonly ISurf2Launcher surf2Launcher;
 
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
@@ -33,6 +35,8 @@ public partial class MainWindow : Window
         settingsStore = new JsonAppSettingsStore();
         emailCacheStore = new JsonEmailCacheStore();
         graphAuthService = new GraphAuthService();
+        surf2IntegrationService = new Surf2IntegrationService();
+        surf2Launcher = new Surf2Launcher();
         var graphMailClient = new GraphMailClient(new HttpClient());
         var graphProvider = new GraphEmailProvider(graphAuthService, graphMailClient, emailCacheStore);
         var classicProvider = new ClassicOutlookEmailProvider(emailCacheStore);
@@ -55,6 +59,9 @@ public partial class MainWindow : Window
         var originalClientId = ViewModel.Settings.Email.ClientId;
         var originalTenantId = ViewModel.Settings.Email.TenantId;
         var originalConnectionString = ViewModel.Settings.Database.ConnectionString;
+        var originalSurf2Enabled = ViewModel.Settings.Surf2.IsEnabled;
+        var originalSurf2ConnectionString = ViewModel.Settings.Surf2.ConnectionString;
+        var originalSurf2ExecutablePath = ViewModel.Settings.Surf2.ExecutablePath;
         var window = new SettingsWindow(
             ViewModel.Settings,
             settingsStore,
@@ -90,6 +97,13 @@ public partial class MainWindow : Window
                 }
             }
 
+            if (originalSurf2Enabled != ViewModel.Settings.Surf2.IsEnabled ||
+                !string.Equals(originalSurf2ConnectionString, ViewModel.Settings.Surf2.ConnectionString, StringComparison.Ordinal) ||
+                !string.Equals(originalSurf2ExecutablePath, ViewModel.Settings.Surf2.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+            {
+                await RefreshOpenTaskDetailSurfScopesAsync();
+            }
+
             ViewModel.UpdateEmailSyncInterval();
             await ViewModel.RefreshEmailsAsync(this, allowInteractiveSignIn: false);
         }
@@ -98,6 +112,18 @@ public partial class MainWindow : Window
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         ViewModel.FlushPendingTaskSaves();
+    }
+
+    private async Task RefreshOpenTaskDetailSurfScopesAsync()
+    {
+        openTaskDetailWindows.RemoveAll(window => !window.IsVisible);
+        foreach (TaskDetailWindow window in openTaskDetailWindows)
+        {
+            if (window.DataContext is TaskDetailViewModel viewModel)
+            {
+                await viewModel.InitializeSurf2Async();
+            }
+        }
     }
 
     private async void RefreshEmailsButton_Click(object sender, RoutedEventArgs e)
@@ -444,7 +470,12 @@ public partial class MainWindow : Window
             ViewModel.ActivateTask(task);
         }
 
-        var window = new TaskDetailWindow(task, ViewModel.Settings.Tags)
+        var window = new TaskDetailWindow(
+            task,
+            ViewModel.Settings.Tags,
+            ViewModel.Settings.Surf2,
+            surf2IntegrationService,
+            surf2Launcher)
         {
             Owner = this
         };

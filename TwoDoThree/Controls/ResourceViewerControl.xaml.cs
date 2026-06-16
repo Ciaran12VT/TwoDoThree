@@ -49,6 +49,27 @@ public partial class ResourceViewerControl : UserControl
         e.Handled = true;
     }
 
+    private void SurfResource_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount < 2 ||
+            sender is not FrameworkElement { DataContext: ResourceItem { Kind: ResourceKind.SurfResource } resource })
+        {
+            return;
+        }
+
+        ResourceLinkHelper.FindTaskDetailViewModel(this)?.OpenLinkedResource(resource);
+        e.Handled = true;
+    }
+
+    private void OpenSurfResourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ResourceItem { Kind: ResourceKind.SurfResource } resource })
+        {
+            ResourceLinkHelper.FindTaskDetailViewModel(this)?.OpenLinkedResource(resource);
+            e.Handled = true;
+        }
+    }
+
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

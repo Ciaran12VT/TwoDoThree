@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using TwoDoThree.Models;
 
 namespace TwoDoThree.Controls;
 
@@ -44,6 +45,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         PreviewDragOver += ResourceLinkRichTextBox_PreviewDragOver;
         Drop += ResourceLinkRichTextBox_Drop;
         MouseDoubleClick += ResourceLinkRichTextBox_MouseDoubleClick;
+        PreviewKeyDown += ResourceLinkRichTextBox_PreviewKeyDown;
     }
 
     public string Text
@@ -239,6 +241,29 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         {
             e.Handled = true;
         }
+    }
+
+    private async void ResourceLinkRichTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.I ||
+            (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != (ModifierKeys.Control | ModifierKeys.Alt))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (ResourceLinkHelper.FindTaskDetailViewModel(this) is not { } viewModel)
+        {
+            return;
+        }
+
+        IReadOnlyList<Surf2ResourceCandidate> resources = await viewModel.GetSurfResourcesForInsertionAsync();
+        SurfResourceIntellisensePopup.Open(this, resources, candidate =>
+        {
+            ResourceItem resource = viewModel.GetOrCreateSurfResource(candidate);
+            Focus();
+            Selection.Text = ResourceLinkHelper.CreateToken(resource);
+        });
     }
 
     private string GetDocumentText()
