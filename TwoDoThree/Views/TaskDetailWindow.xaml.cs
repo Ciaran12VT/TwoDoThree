@@ -99,6 +99,13 @@ public partial class TaskDetailWindow : Window
 
     private void ResourcesExpander_Expanded(object sender, RoutedEventArgs e)
     {
+        if (ResourceSectionRow is null
+            || ResourceActionSplitterRow is null
+            || ResourceActionGridSplitter is null)
+        {
+            return;
+        }
+
         ResourceSectionRow.Height = expandedResourceSectionHeight;
         ResourceSectionRow.MinHeight = 180;
         ResourceActionSplitterRow.Height = GridLength.Auto;
@@ -107,6 +114,13 @@ public partial class TaskDetailWindow : Window
 
     private void ResourcesExpander_Collapsed(object sender, RoutedEventArgs e)
     {
+        if (ResourceSectionRow is null
+            || ResourceActionSplitterRow is null
+            || ResourceActionGridSplitter is null)
+        {
+            return;
+        }
+
         expandedResourceSectionHeight = ResourceSectionRow.Height;
         ResourceSectionRow.MinHeight = 0;
         ResourceSectionRow.Height = GridLength.Auto;
