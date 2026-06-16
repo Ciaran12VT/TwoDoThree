@@ -8,6 +8,10 @@ public sealed class ResourceItem : ObservableObject
     private ResourceKind kind;
     private string content = string.Empty;
     private string codeLanguage = "C#";
+    private string emailMessageId = string.Empty;
+    private string emailFrom = string.Empty;
+    private string emailSubject = string.Empty;
+    private DateTime? emailReceivedOn;
 
     public string Name
     {
@@ -31,5 +35,29 @@ public sealed class ResourceItem : ObservableObject
     {
         get => codeLanguage;
         set => SetProperty(ref codeLanguage, value);
+    }
+
+    public string EmailMessageId
+    {
+        get => emailMessageId;
+        set => SetProperty(ref emailMessageId, value);
+    }
+
+    public string EmailFrom
+    {
+        get => emailFrom;
+        set => SetProperty(ref emailFrom, value);
+    }
+
+    public string EmailSubject
+    {
+        get => emailSubject;
+        set => SetProperty(ref emailSubject, value);
+    }
+
+    public DateTime? EmailReceivedOn
+    {
+        get => emailReceivedOn;
+        set => SetProperty(ref emailReceivedOn, value);
     }
 }

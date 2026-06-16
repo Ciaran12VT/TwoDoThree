@@ -24,8 +24,7 @@ public sealed class TaskDetailViewModel : ObservableObject
         SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null);
         AddActionCommand = new RelayCommand(_ => AddAction());
 
-        RebuildResourceGroups();
-        SelectedResource = Task.Resources.FirstOrDefault();
+        RefreshResourceGroups();
         RenumberActions(Task.Actions);
     }
 
@@ -69,6 +68,17 @@ public sealed class TaskDetailViewModel : ObservableObject
     public ICommand SaveSelectedResourceCommand { get; }
 
     public ICommand AddActionCommand { get; }
+
+    public void RefreshResourceGroups(ResourceItem? preferredResource = null)
+    {
+        var resourceToSelect = preferredResource ?? SelectedResource;
+
+        RebuildResourceGroups();
+
+        SelectedResource = resourceToSelect is not null && Task.Resources.Contains(resourceToSelect)
+            ? resourceToSelect
+            : Task.Resources.FirstOrDefault();
+    }
 
     public static void RenumberActions(IEnumerable<ActionItem> actions)
     {
@@ -450,8 +460,7 @@ public sealed class TaskDetailViewModel : ObservableObject
     private void AddResource(ResourceItem resource)
     {
         Task.Resources.Add(resource);
-        RebuildResourceGroups();
-        SelectedResource = resource;
+        RefreshResourceGroups(resource);
         TouchTask();
     }
 

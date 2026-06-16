@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using ICSharpCode.AvalonEdit.Highlighting;
 using TwoDoThree.Models;
 
@@ -111,6 +112,38 @@ public partial class CodeSnippetEditor : UserControl
         finally
         {
             isUpdatingResource = false;
+        }
+    }
+
+    private void Editor_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = ResourceLinkHelper.TryGetDraggedResource(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Editor_Drop(object sender, DragEventArgs e)
+    {
+        if (!ResourceLinkHelper.TryGetDraggedResource(e, out var resource) || resource is null)
+        {
+            return;
+        }
+
+        var position = Editor.GetPositionFromPoint(e.GetPosition(Editor));
+        if (position.HasValue)
+        {
+            Editor.CaretOffset = Editor.Document.GetOffset(position.Value.Location);
+        }
+
+        Editor.Document.Insert(Editor.CaretOffset, ResourceLinkHelper.CreateToken(resource));
+        e.Handled = true;
+    }
+
+    private void Editor_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        var resourceName = ResourceLinkHelper.GetResourceNameAtOffset(Editor.Text, Editor.CaretOffset);
+        if (ResourceLinkHelper.TryOpenResource(resourceName, this))
+        {
+            e.Handled = true;
         }
     }
 

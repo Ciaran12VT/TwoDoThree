@@ -13,6 +13,7 @@ public sealed class ResourceGroup
 
     public string Name => Kind switch
     {
+        ResourceKind.Email => "Emails",
         ResourceKind.CodeSnippet => "Code Snippets",
         ResourceKind.SurfResource => "Surf Resources",
         _ => $"{Kind}s"

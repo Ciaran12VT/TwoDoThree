@@ -10,8 +10,12 @@
                                Background="#111827"
                                Foreground="#F9FAFB"
                                LineNumbersForeground="#9CA3AF"
+                               AllowDrop="True"
                                HorizontalScrollBarVisibility="Auto"
                                VerticalScrollBarVisibility="Auto"
+                               PreviewDragOver="Editor_PreviewDragOver"
+                               Drop="Editor_Drop"
+                               MouseDoubleClick="Editor_MouseDoubleClick"
                                TextChanged="Editor_TextChanged">
             <avalonEdit:TextEditor.ContextMenu>
                 <ContextMenu>

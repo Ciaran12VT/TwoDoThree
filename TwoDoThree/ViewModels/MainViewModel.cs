@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Threading;
 using System.Windows.Data;
@@ -14,6 +15,7 @@ public sealed class MainViewModel : ObservableObject
     private bool isEnforcingActiveTask;
     private int nextTaskId = 1004;
     private string searchText = string.Empty;
+    private EmailMessage? taskEmailFilter;
     private EmailMessage? selectedEmail;
     private TaskItem? selectedTask;
     private bool isEmailSectionExpanded = true;
@@ -30,6 +32,7 @@ public sealed class MainViewModel : ObservableObject
         SeedInbox();
         RefreshEmails();
         SeedTasks();
+        RefreshEmailTaskAssociations();
         RecalculateAllTaskTimeSpent();
 
         activeTaskTimer = new DispatcherTimer
@@ -87,6 +90,12 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref isTaskSectionExpanded, value);
     }
 
+    public string TaskEmailFilterSummary => taskEmailFilter is null
+        ? string.Empty
+        : $"Email: {taskEmailFilter.Subject}";
+
+    public bool HasTaskEmailFilter => taskEmailFilter is not null;
+
     public TaskItem CreateEmptyTask()
     {
         var task = CreateTask("New task", "manual");
@@ -100,12 +109,7 @@ public sealed class MainViewModel : ObservableObject
     public TaskItem CreateTaskFromEmail(EmailMessage email)
     {
         var task = CreateTask(email.Subject, "email, outlook");
-        task.Resources.Add(new ResourceItem
-        {
-            Name = email.Subject,
-            Kind = ResourceKind.Text,
-            Content = $"From: {email.From}{Environment.NewLine}Received: {email.ReceivedOn:g}{Environment.NewLine}{Environment.NewLine}{email.Body}"
-        });
+        AddEmailResourceCore(task, email);
         task.Actions.Add(new ActionItem { ActionText = "Review the email and define the next step" });
         TaskDetailViewModel.RenumberActions(task.Actions);
 
@@ -113,6 +117,31 @@ public sealed class MainViewModel : ObservableObject
         SelectedTask = task;
         TasksView.Refresh();
         return task;
+    }
+
+    public ResourceItem AddEmailResource(TaskItem task, EmailMessage email)
+    {
+        var resource = AddEmailResourceCore(task, email);
+        task.UpdatedOn = DateTime.Now;
+        SelectedTask = task;
+        RefreshEmailTaskAssociations();
+        TasksView.Refresh();
+        return resource;
+    }
+
+    public void FilterTasksByEmail(EmailMessage email)
+    {
+        SetTaskEmailFilter(email);
+        IsTaskSectionExpanded = true;
+        TasksView.Refresh();
+        SelectedTask = TasksView.Cast<TaskItem>().FirstOrDefault();
+    }
+
+    public void ClearTaskEmailFilter()
+    {
+        SetTaskEmailFilter(null);
+        TasksView.Refresh();
+        SelectedTask = TasksView.Cast<TaskItem>().FirstOrDefault();
     }
 
     public void SetTaskStatus(TaskItem task, TaskItemStatus status)
@@ -160,9 +189,11 @@ public sealed class MainViewModel : ObservableObject
     private void AddTask(TaskItem task)
     {
         task.PropertyChanged += Task_PropertyChanged;
+        task.Resources.CollectionChanged += TaskResources_CollectionChanged;
         task.AddActivity("Task created with status Inactive.");
         UpdateTaskTimeSpent(task);
         Tasks.Add(task);
+        RefreshEmailTaskAssociations();
     }
 
     private static void AddDefaultNotesResource(TaskItem task)
@@ -173,6 +204,47 @@ public sealed class MainViewModel : ObservableObject
             Kind = ResourceKind.Text,
             Content = string.Empty
         });
+    }
+
+    private void SetTaskEmailFilter(EmailMessage? email)
+    {
+        if (ReferenceEquals(taskEmailFilter, email))
+        {
+            return;
+        }
+
+        taskEmailFilter = email;
+        OnPropertyChanged(nameof(TaskEmailFilterSummary));
+        OnPropertyChanged(nameof(HasTaskEmailFilter));
+    }
+
+    private static ResourceItem AddEmailResourceCore(TaskItem task, EmailMessage email)
+    {
+        if (!string.IsNullOrWhiteSpace(email.Id))
+        {
+            var existing = task.Resources.FirstOrDefault(resource =>
+                resource.Kind == ResourceKind.Email
+                && string.Equals(resource.EmailMessageId, email.Id, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is not null)
+            {
+                return existing;
+            }
+        }
+
+        var resource = new ResourceItem
+        {
+            Name = string.IsNullOrWhiteSpace(email.Subject) ? "Email" : email.Subject,
+            Kind = ResourceKind.Email,
+            Content = email.Body,
+            EmailMessageId = email.Id,
+            EmailFrom = email.From,
+            EmailSubject = email.Subject,
+            EmailReceivedOn = email.ReceivedOn
+        };
+
+        task.Resources.Add(resource);
+        return resource;
     }
 
     private bool FilterEmail(object item)
@@ -195,14 +267,19 @@ public sealed class MainViewModel : ObservableObject
 
     private bool FilterTask(object item)
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
-        {
-            return true;
-        }
-
         if (item is not TaskItem task)
         {
             return false;
+        }
+
+        if (taskEmailFilter is not null && !TaskHasEmailResource(task, taskEmailFilter))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            return true;
         }
 
         return task.Id.ToString().Contains(SearchText, StringComparison.OrdinalIgnoreCase)
@@ -276,7 +353,19 @@ public sealed class MainViewModel : ObservableObject
 
     private void Task_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not TaskItem task || e.PropertyName != nameof(TaskItem.Status))
+        if (sender is not TaskItem task)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(TaskItem.Title))
+        {
+            RefreshEmailTaskAssociations();
+            TasksView.Refresh();
+            return;
+        }
+
+        if (e.PropertyName != nameof(TaskItem.Status))
         {
             return;
         }
@@ -288,6 +377,47 @@ public sealed class MainViewModel : ObservableObject
 
         UpdateTaskTimeSpent(task);
         TasksView.Refresh();
+    }
+
+    private void TaskResources_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RefreshEmailTaskAssociations();
+        TasksView.Refresh();
+    }
+
+    private void RefreshEmailTaskAssociations()
+    {
+        foreach (var email in configuredAccountMessages)
+        {
+            var taskNames = Tasks
+                .Where(task => TaskHasEmailResource(task, email))
+                .Select(task => task.Title)
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            email.AssociatedTaskNames = string.Join(", ", taskNames);
+        }
+    }
+
+    private static bool TaskHasEmailResource(TaskItem task, EmailMessage email)
+    {
+        return task.Resources.Any(resource =>
+            resource.Kind == ResourceKind.Email
+            && IsEmailResourceMatch(resource, email));
+    }
+
+    private static bool IsEmailResourceMatch(ResourceItem resource, EmailMessage email)
+    {
+        if (!string.IsNullOrWhiteSpace(email.Id)
+            && string.Equals(resource.EmailMessageId, email.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.IsNullOrWhiteSpace(email.Id)
+               && string.Equals(resource.EmailSubject, email.Subject, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(resource.EmailFrom, email.From, StringComparison.OrdinalIgnoreCase)
+               && resource.EmailReceivedOn == email.ReceivedOn;
     }
 
     private void EnforceSingleActiveTask(TaskItem activeTask)

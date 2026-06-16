@@ -60,6 +60,7 @@
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
                      BorderThickness="0"
+                     controls:ResourceLinkTextBox.IsEnabled="True"
                      Background="#FFFFFF" />
         </DataTemplate>
 
@@ -67,11 +68,42 @@
             <controls:CodeSnippetEditor Resource="{Binding}" />
         </DataTemplate>
 
+        <DataTemplate x:Key="EmailResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="{Binding EmailSubject}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap" />
+                <TextBlock Grid.Row="1"
+                           Margin="0,8,0,0"
+                           Text="{Binding EmailFrom, StringFormat='From: {0}'}"
+                           Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Grid.Row="2"
+                           Margin="0,2,0,10"
+                           Text="{Binding EmailReceivedOn, StringFormat='Received: {0:g}'}"
+                           Foreground="{StaticResource MutedTextBrush}" />
+                <TextBox Grid.Row="3"
+                         Text="{Binding Content}"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         BorderThickness="0"
+                         Background="#FFFFFF" />
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="ImageResourceTemplate" DataType="{x:Type models:ResourceItem}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Border BorderBrush="{StaticResource MutedBorderBrush}"
                         BorderThickness="1"
@@ -118,8 +150,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="3*" MinHeight="180" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="ResourceSectionRow" Height="3*" MinHeight="180" />
+            <RowDefinition x:Name="ResourceActionSplitterRow" Height="Auto" />
             <RowDefinition Height="2*" MinHeight="180" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -224,26 +256,6 @@
                             Margin="0,12,20,0"
                             SelectedDate="{Binding Task.DueBy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                <Expander Grid.Row="4"
-                          Grid.ColumnSpan="6"
-                          Header="Activities"
-                          Margin="0,14,0,0">
-                    <DataGrid ItemsSource="{Binding Task.Activities}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              IsReadOnly="True"
-                              HeadersVisibility="Column"
-                              MaxHeight="140">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Timestamp"
-                                                Width="150"
-                                                Binding="{Binding OccurredOn, StringFormat={}{0:g}}" />
-                            <DataGridTextColumn Header="Activity"
-                                                Width="*"
-                                                Binding="{Binding Activity}" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Expander>
             </Grid>
         </Border>
 
@@ -252,54 +264,13 @@
                        FontSize="16"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center" />
-            <StackPanel DockPanel.Dock="Right"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Right">
-                <Button Style="{StaticResource RoundIconButtonStyle}"
-                        ToolTip="Text"
-                        Command="{Binding AddTextResourceCommand}">
-                    <TextBlock Text="&#xE8A5;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15" />
-                </Button>
-                <Button Style="{StaticResource RoundIconButtonStyle}"
-                        ToolTip="Code Snippet"
-                        Margin="8,0,0,0"
-                        Command="{Binding AddCodeResourceCommand}">
-                    <TextBlock Text="&#xE943;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15" />
-                </Button>
-                <Button Style="{StaticResource RoundIconButtonStyle}"
-                        ToolTip="Image"
-                        Margin="8,0,0,0"
-                        Command="{Binding AddImageResourceCommand}">
-                    <TextBlock Text="&#xE91B;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15" />
-                </Button>
-                <Button Style="{StaticResource RoundIconButtonStyle}"
-                        ToolTip="Audio"
-                        Margin="8,0,0,0"
-                        Command="{Binding AddAudioResourceCommand}">
-                    <TextBlock Text="&#xE767;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15" />
-                </Button>
-                <Button Style="{StaticResource RoundIconButtonStyle}"
-                        ToolTip="Surf Resource"
-                        Margin="8,0,0,0"
-                        Command="{Binding AddSurfResourceCommand}">
-                    <TextBlock Text="&#xE774;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15" />
-                </Button>
-            </StackPanel>
         </DockPanel>
 
         <Expander Grid.Row="2"
                   Header="Resources"
                   IsExpanded="True"
+                  Expanded="ResourcesExpander_Expanded"
+                  Collapsed="ResourcesExpander_Collapsed"
                   Margin="0,0,0,0">
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource MutedBorderBrush}"
@@ -310,6 +281,7 @@
                         <ColumnDefinition Width="*" MinWidth="420" />
                         <ColumnDefinition x:Name="ResourceSplitterColumn" Width="Auto" />
                         <ColumnDefinition x:Name="ResourcePaneColumn" Width="292" MinWidth="32" />
+                        <ColumnDefinition Width="44" />
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0"
@@ -347,6 +319,9 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.CodeSnippet}">
                                                 <Setter Property="ContentTemplate" Value="{StaticResource CodeResourceTemplate}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Email}">
+                                                <Setter Property="ContentTemplate" Value="{StaticResource EmailResourceTemplate}" />
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Image}">
                                                 <Setter Property="ContentTemplate" Value="{StaticResource ImageResourceTemplate}" />
@@ -392,6 +367,7 @@
                             <TreeView x:Name="ResourceTree"
                                       ItemsSource="{Binding ResourceGroups}"
                                       SelectedItemChanged="ResourceTree_SelectedItemChanged"
+                                      PreviewMouseMove="ResourceTree_PreviewMouseMove"
                                       PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
                                       ContextMenuOpening="ResourceTree_ContextMenuOpening"
                                       BorderThickness="0">
@@ -413,11 +389,58 @@
                             </TreeView>
                         </Border>
                     </Grid>
+
+                    <StackPanel Grid.Column="3"
+                                Orientation="Vertical"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Margin="8,0,0,0">
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Text"
+                                Command="{Binding AddTextResourceCommand}">
+                            <TextBlock Text="&#xE8A5;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Code Snippet"
+                                Margin="0,8,0,0"
+                                Command="{Binding AddCodeResourceCommand}">
+                            <TextBlock Text="&#xE943;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Image"
+                                Margin="0,8,0,0"
+                                Command="{Binding AddImageResourceCommand}">
+                            <TextBlock Text="&#xE91B;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Audio"
+                                Margin="0,8,0,0"
+                                Command="{Binding AddAudioResourceCommand}">
+                            <TextBlock Text="&#xE767;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Surf Resource"
+                                Margin="0,8,0,0"
+                                Command="{Binding AddSurfResourceCommand}">
+                            <TextBlock Text="&#xE774;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Expander>
 
-        <GridSplitter Grid.Row="3"
+        <GridSplitter x:Name="ResourceActionGridSplitter"
+                      Grid.Row="3"
                       Height="8"
                       Margin="0,6"
                       HorizontalAlignment="Stretch"
