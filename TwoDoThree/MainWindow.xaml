@@ -255,7 +255,8 @@
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
-                                HorizontalAlignment="Right">
+                                HorizontalAlignment="Right"
+                                Margin="0,0,6,0">
                         <Button Style="{StaticResource RoundHeaderIconButtonStyle}"
                                 ToolTip="Settings"
                                 Click="SettingsButton_Click">
@@ -450,7 +451,8 @@
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
-                                HorizontalAlignment="Right">
+                                HorizontalAlignment="Right"
+                                Margin="0,0,6,0">
                         <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
                                       IsChecked="{Binding IsGridTaskView, Mode=TwoWay}"
                                       ToolTip="Grid view">
