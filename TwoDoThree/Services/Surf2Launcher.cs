@@ -10,7 +10,6 @@ public sealed class Surf2Launcher : ISurf2Launcher
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
 
@@ -37,25 +36,33 @@ public sealed class Surf2Launcher : ISurf2Launcher
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var request = new
+        var request = new Surf2ExternalOpenRequest
         {
-            connectionString = settings.ConnectionString,
-            scopeId = resourceLink.ScopeId,
-            scopeName = resourceLink.ScopeName,
-            resourcePath = resourceLink.ResourcePath,
-            resourceName = resourceLink.ResourceName,
-            resourceKind = resourceLink.ResourceKind,
-            lineNumber = resourceLink.LineNumber,
-            columnNumber = resourceLink.ColumnNumber
+            ConnectionString = settings.ConnectionString,
+            ScopeId = resourceLink.ScopeId,
+            ScopeName = resourceLink.ScopeName,
+            ResourcePath = resourceLink.ResourcePath,
+            ResourceName = resourceLink.ResourceName,
+            ResourceKind = resourceLink.ResourceKind,
+            LineNumber = resourceLink.LineNumber,
+            ColumnNumber = resourceLink.ColumnNumber
         };
         string json = JsonSerializer.Serialize(request, JsonOptions);
         string encodedJson = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+        string executablePath = ResolveExecutablePath(settings);
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = ResolveExecutablePath(settings),
+            FileName = executablePath,
             UseShellExecute = false
         };
+        string? workingDirectory = Path.GetDirectoryName(executablePath);
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            startInfo.WorkingDirectory = workingDirectory;
+        }
+
+        startInfo.ArgumentList.Add("--external-open");
         startInfo.ArgumentList.Add("--surf2-open-json");
         startInfo.ArgumentList.Add(encodedJson);
 
@@ -132,5 +139,24 @@ public sealed class Surf2Launcher : ISurf2Launcher
 
             current = current.Parent;
         }
+    }
+
+    private sealed class Surf2ExternalOpenRequest
+    {
+        public string ConnectionString { get; set; } = string.Empty;
+
+        public string ScopeId { get; set; } = string.Empty;
+
+        public string ScopeName { get; set; } = string.Empty;
+
+        public string ResourcePath { get; set; } = string.Empty;
+
+        public string ResourceName { get; set; } = string.Empty;
+
+        public string ResourceKind { get; set; } = string.Empty;
+
+        public int? LineNumber { get; set; }
+
+        public int? ColumnNumber { get; set; }
     }
 }

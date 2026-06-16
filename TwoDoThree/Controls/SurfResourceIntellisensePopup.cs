@@ -111,10 +111,24 @@ public sealed class SurfResourceIntellisensePopup
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Down && resourceList.Items.Count > 0)
+        if (e.Key == Key.Down)
         {
-            resourceList.Focus();
-            resourceList.SelectedIndex = Math.Max(0, resourceList.SelectedIndex);
+            MoveSelection(1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Up)
+        {
+            MoveSelection(-1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageDown)
+        {
+            MoveSelection(6);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageUp)
+        {
+            MoveSelection(-6);
             e.Handled = true;
         }
         else if (e.Key == Key.Enter)
@@ -141,6 +155,20 @@ public sealed class SurfResourceIntellisensePopup
             popup.IsOpen = false;
             e.Handled = true;
         }
+    }
+
+    private void MoveSelection(int delta)
+    {
+        if (resourceList.Items.Count == 0)
+        {
+            resourceList.SelectedIndex = -1;
+            return;
+        }
+
+        int currentIndex = resourceList.SelectedIndex < 0 ? 0 : resourceList.SelectedIndex;
+        int nextIndex = Math.Clamp(currentIndex + delta, 0, resourceList.Items.Count - 1);
+        resourceList.SelectedIndex = nextIndex;
+        resourceList.ScrollIntoView(resourceList.SelectedItem);
     }
 
     private void CommitSelection()

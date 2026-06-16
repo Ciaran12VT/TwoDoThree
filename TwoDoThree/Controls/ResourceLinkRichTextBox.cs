@@ -80,6 +80,23 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         CaretPosition = GetTextPointerAtCharOffset(moveToEnd ? Text.Length : 0) ?? Document.ContentStart;
     }
 
+    public void InsertResourceToken(ResourceItem resource)
+    {
+        string token = ResourceLinkHelper.CreateToken(resource);
+        int insertionOffset = CaretCharacterIndex;
+        Selection.Text = token;
+
+        TextPointer? afterToken = GetTextPointerAtCharOffset(insertionOffset + token.Length);
+        if (afterToken is not null)
+        {
+            CaretPosition = afterToken.GetInsertionPosition(LogicalDirection.Forward) ?? afterToken;
+        }
+
+        ApplyResourceLinkFormatting();
+        ResetTypingStyleAfterResourceLink();
+        UpdateBoundTextAndFormatting();
+    }
+
     public void SetSelectionFontFamily(string fontFamily)
     {
         if (string.IsNullOrWhiteSpace(fontFamily))
@@ -230,7 +247,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
             CaretPosition = position;
         }
 
-        Selection.Text = ResourceLinkHelper.CreateToken(resource);
+        InsertResourceToken(resource);
         e.Handled = true;
     }
 
@@ -262,7 +279,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         {
             ResourceItem resource = viewModel.GetOrCreateSurfResource(candidate);
             Focus();
-            Selection.Text = ResourceLinkHelper.CreateToken(resource);
+            InsertResourceToken(resource);
         });
     }
 
@@ -322,6 +339,12 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         Selection.ApplyPropertyValue(property, value);
         ApplyResourceLinkFormatting();
         UpdateBoundTextAndFormatting();
+    }
+
+    private void ResetTypingStyleAfterResourceLink()
+    {
+        Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+        Selection.ApplyPropertyValue(TextElement.ForegroundProperty, Foreground);
     }
 
     private void ToggleTextDecoration(TextDecorationLocation location)
