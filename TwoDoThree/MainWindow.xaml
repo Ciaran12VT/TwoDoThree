@@ -197,11 +197,14 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Expander Grid.Row="0"
+        <Expander x:Name="EmailExpander"
+                  Grid.Row="0"
                   IsExpanded="{Binding IsEmailSectionExpanded}"
+                  SizeChanged="SectionExpander_SizeChanged"
                   Margin="0,0,0,12">
             <Expander.Header>
-                <DockPanel LastChildFill="False">
+                <DockPanel x:Name="EmailHeaderPanel"
+                           LastChildFill="False">
                     <TextBlock Text="Emails"
                                VerticalAlignment="Center" />
                     <TextBox Width="260"
@@ -366,10 +369,13 @@
             </Border>
         </Expander>
 
-        <Expander Grid.Row="1"
-                  IsExpanded="{Binding IsTaskSectionExpanded}">
+        <Expander x:Name="TasksExpander"
+                  Grid.Row="1"
+                  IsExpanded="{Binding IsTaskSectionExpanded}"
+                  SizeChanged="SectionExpander_SizeChanged">
             <Expander.Header>
-                <DockPanel LastChildFill="False">
+                <DockPanel x:Name="TasksHeaderPanel"
+                           LastChildFill="False">
                     <TextBlock Text="Tasks"
                                VerticalAlignment="Center" />
                     <TextBox Width="260"

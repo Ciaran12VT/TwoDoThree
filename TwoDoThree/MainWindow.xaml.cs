@@ -18,6 +18,7 @@ public partial class MainWindow : Window
 {
     private const string EmailDataFormat = "TwoDoThree.EmailMessage";
     private const string TaskDataFormat = "TwoDoThree.TaskItem";
+    private const double ExpanderGlyphWidth = 24;
 
     private readonly List<TaskDetailWindow> openTaskDetailWindows = new();
     private readonly IAppSettingsStore settingsStore;
@@ -395,6 +396,17 @@ public partial class MainWindow : Window
             e.Handled = true;
             textBox.Focus();
         }
+    }
+
+    private void SectionExpander_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSectionHeaderWidths();
+    }
+
+    private void UpdateSectionHeaderWidths()
+    {
+        EmailHeaderPanel.Width = Math.Max(0, EmailExpander.ActualWidth - ExpanderGlyphWidth);
+        TasksHeaderPanel.Width = Math.Max(0, TasksExpander.ActualWidth - ExpanderGlyphWidth);
     }
 
     private void CopyTasksAsText()
