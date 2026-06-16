@@ -84,31 +84,120 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="RoundHeaderIconButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#9CA3AF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#EFF6FF" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#2563EB" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#DBEAFE" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RoundTaskViewToggleStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#9CA3AF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#EFF6FF" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#2563EB" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#2563EB" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#1D4ED8" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1D4ED8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="GridTaskViewVisibilityStyle" TargetType="{x:Type FrameworkElement}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsGridTaskView}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="TagTaskViewVisibilityStyle" TargetType="{x:Type FrameworkElement}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsTagBucketTaskView}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StatusTaskViewVisibilityStyle" TargetType="{x:Type FrameworkElement}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsStatusKanbanTaskView}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,12" LastChildFill="False">
-            <Button DockPanel.Dock="Right"
-                    Width="36"
-                    Height="32"
-                    Padding="0"
-                    ToolTip="Settings"
-                    Click="SettingsButton_Click">
-                <TextBlock FontFamily="Segoe MDL2 Assets"
-                           Text="&#xE713;"
-                           FontSize="16"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
-            </Button>
-        </DockPanel>
-
-        <Expander Grid.Row="1"
+        <Expander Grid.Row="0"
                   IsExpanded="{Binding IsEmailSectionExpanded}"
                   Margin="0,0,0,12">
             <Expander.Header>
@@ -155,6 +244,16 @@
                             <TextBlock Text="&#xE72C;"
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="12" />
+                        </Button>
+                        <Button Style="{StaticResource RoundHeaderIconButtonStyle}"
+                                Margin="6,0,0,0"
+                                ToolTip="Settings"
+                                Click="SettingsButton_Click">
+                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                       Text="&#xE713;"
+                                       FontSize="12"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
                         </Button>
                     </StackPanel>
                 </DockPanel>
@@ -267,7 +366,7 @@
             </Border>
         </Expander>
 
-        <Expander Grid.Row="2"
+        <Expander Grid.Row="1"
                   IsExpanded="{Binding IsTaskSectionExpanded}">
             <Expander.Header>
                 <DockPanel LastChildFill="False">
@@ -331,6 +430,30 @@
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="10" />
                         </Button>
+                        <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
+                                      Margin="12,0,0,0"
+                                      IsChecked="{Binding IsGridTaskView, Mode=TwoWay}"
+                                      ToolTip="Grid view">
+                            <TextBlock Text="&#xE80A;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </ToggleButton>
+                        <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
+                                      Margin="6,0,0,0"
+                                      IsChecked="{Binding IsTagBucketTaskView, Mode=TwoWay}"
+                                      ToolTip="Tag bucket view">
+                            <TextBlock Text="&#xE8EC;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </ToggleButton>
+                        <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
+                                      Margin="6,0,0,0"
+                                      IsChecked="{Binding IsStatusKanbanTaskView, Mode=TwoWay}"
+                                      ToolTip="Status Kanban view">
+                            <TextBlock Text="&#xECA5;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </ToggleButton>
                     </StackPanel>
                 </DockPanel>
             </Expander.Header>
@@ -366,8 +489,9 @@
                         </StackPanel>
                     </DockPanel>
 
-                    <DataGrid x:Name="TasksGrid"
-                              Grid.Row="1"
+                    <Grid Grid.Row="1"
+                          Style="{StaticResource GridTaskViewVisibilityStyle}">
+                        <DataGrid x:Name="TasksGrid"
                               ItemsSource="{Binding TasksView}"
                               SelectedItem="{Binding SelectedTask}"
                               AutoGenerateColumns="False"
@@ -463,6 +587,125 @@
                             <DataGridTextColumn Header="Time Spent" Width="120" Binding="{Binding TimeSpent}" />
                         </DataGrid.Columns>
                     </DataGrid>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TagTaskViewVisibilityStyle}">
+                        <ItemsControl ItemsSource="{Binding TagTaskBuckets}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="260"
+                                            Margin="0,0,12,0"
+                                            Padding="8"
+                                            Background="#F9FAFB"
+                                            BorderBrush="{StaticResource MutedBorderBrush}"
+                                            BorderThickness="1"
+                                            AllowDrop="True"
+                                            PreviewDragOver="TagTaskBucket_PreviewDragOver"
+                                            Drop="TagTaskBucket_Drop">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,0,8" />
+                                            <ItemsControl Grid.Row="1"
+                                                          ItemsSource="{Binding Tasks}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Margin="0,0,0,8"
+                                                                Padding="8"
+                                                                MinHeight="48"
+                                                                Background="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}"
+                                                                BorderBrush="{StaticResource MutedBorderBrush}"
+                                                                BorderThickness="1"
+                                                                Cursor="Hand"
+                                                                PreviewMouseMove="TaskBoardCard_PreviewMouseMove"
+                                                                MouseLeftButtonDown="TaskBoardCard_MouseLeftButtonDown">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Foreground="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}"
+                                                                       FontWeight="SemiBold"
+                                                                       TextWrapping="Wrap"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource StatusTaskViewVisibilityStyle}">
+                        <ItemsControl ItemsSource="{Binding StatusTaskBuckets}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="260"
+                                            Margin="0,0,12,0"
+                                            Padding="8"
+                                            Background="#F9FAFB"
+                                            BorderBrush="{StaticResource MutedBorderBrush}"
+                                            BorderThickness="1"
+                                            AllowDrop="True"
+                                            PreviewDragOver="StatusTaskBucket_PreviewDragOver"
+                                            Drop="StatusTaskBucket_Drop">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,0,8" />
+                                            <ItemsControl Grid.Row="1"
+                                                          ItemsSource="{Binding Tasks}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Margin="0,0,0,8"
+                                                                Padding="8"
+                                                                MinHeight="48"
+                                                                Background="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}"
+                                                                BorderBrush="{StaticResource MutedBorderBrush}"
+                                                                BorderThickness="1"
+                                                                Cursor="Hand"
+                                                                PreviewMouseMove="TaskBoardCard_PreviewMouseMove"
+                                                                MouseLeftButtonDown="TaskBoardCard_MouseLeftButtonDown">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Foreground="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}"
+                                                                       FontWeight="SemiBold"
+                                                                       TextWrapping="Wrap"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Grid>
             </Border>
         </Expander>

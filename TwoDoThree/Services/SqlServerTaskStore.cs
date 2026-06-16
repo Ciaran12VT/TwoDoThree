@@ -45,7 +45,8 @@ public sealed class SqlServerTaskStore : ITaskStore
         LoadActivityRows(connection, tasks);
 
         return tasks.Values
-            .OrderBy(task => task.Id)
+            .OrderBy(task => task.SortOrder)
+            .ThenBy(task => task.Id)
             .ToList();
     }
 
@@ -102,8 +103,14 @@ BEGIN
         DueBy datetime2 NULL,
         CreatedOn datetime2 NOT NULL,
         UpdatedOn datetime2 NOT NULL,
-        TimeSpentSeconds bigint NOT NULL
+        TimeSpentSeconds bigint NOT NULL,
+        SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0)
     );
+END;
+
+IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SortOrder') IS NULL
+BEGIN
+    ALTER TABLE dbo.TwoDoThreeTasks ADD SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0);
 END;
 
 IF OBJECT_ID(N'dbo.TwoDoThreeResources', N'U') IS NULL
@@ -168,6 +175,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeActions_Tas
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeActivities_TaskId' AND object_id = OBJECT_ID(N'dbo.TwoDoThreeActivities'))
     CREATE INDEX IX_TwoDoThreeActivities_TaskId ON dbo.TwoDoThreeActivities(TaskId, OccurredOn, SortOrder);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeTasks_SortOrder' AND object_id = OBJECT_ID(N'dbo.TwoDoThreeTasks'))
+    CREATE INDEX IX_TwoDoThreeTasks_SortOrder ON dbo.TwoDoThreeTasks(SortOrder, Id);
 """;
         command.ExecuteNonQuery();
     }
@@ -176,9 +186,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeActivities_
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-SELECT Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds
+SELECT Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder
 FROM dbo.TwoDoThreeTasks
-ORDER BY Id;
+ORDER BY SortOrder, Id;
 """;
 
         using var reader = command.ExecuteReader();
@@ -195,7 +205,8 @@ ORDER BY Id;
                 DueBy = ReadNullableDateTime(reader, "DueBy"),
                 CreatedOn = ReadDateTime(reader, "CreatedOn"),
                 UpdatedOn = ReadDateTime(reader, "UpdatedOn"),
-                TimeSpent = TimeSpan.FromSeconds(ReadLong(reader, "TimeSpentSeconds"))
+                TimeSpent = TimeSpan.FromSeconds(ReadLong(reader, "TimeSpentSeconds")),
+                SortOrder = ReadInt(reader, "SortOrder")
             };
             task.InitializeStatus(status, statusBeforeActive);
             tasks[task.Id] = task;
@@ -313,10 +324,11 @@ WHEN MATCHED THEN
         DueBy = @DueBy,
         CreatedOn = @CreatedOn,
         UpdatedOn = @UpdatedOn,
-        TimeSpentSeconds = @TimeSpentSeconds
+        TimeSpentSeconds = @TimeSpentSeconds,
+        SortOrder = @SortOrder
 WHEN NOT MATCHED THEN
-    INSERT (Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds)
-    VALUES (@Id, @Title, @Tags, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds);
+    INSERT (Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder)
+    VALUES (@Id, @Title, @Tags, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds, @SortOrder);
 """);
 
         AddParameter(command, "@Id", task.Id);
@@ -328,6 +340,7 @@ WHEN NOT MATCHED THEN
         AddParameter(command, "@CreatedOn", task.CreatedOn);
         AddParameter(command, "@UpdatedOn", task.UpdatedOn);
         AddParameter(command, "@TimeSpentSeconds", (long)Math.Floor(task.TimeSpent.TotalSeconds));
+        AddParameter(command, "@SortOrder", task.SortOrder);
         command.ExecuteNonQuery();
     }
 

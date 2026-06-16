@@ -17,6 +17,7 @@ namespace TwoDoThree;
 public partial class MainWindow : Window
 {
     private const string EmailDataFormat = "TwoDoThree.EmailMessage";
+    private const string TaskDataFormat = "TwoDoThree.TaskItem";
 
     private readonly List<TaskDetailWindow> openTaskDetailWindows = new();
     private readonly IAppSettingsStore settingsStore;
@@ -236,6 +237,101 @@ public partial class MainWindow : Window
         }
     }
 
+    private void TaskBoardCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount >= 2
+            && sender is FrameworkElement { DataContext: TaskItem task })
+        {
+            ViewModel.SelectedTask = task;
+            OpenTaskDetail(task, activate: !HasOpenTaskDetailWindows);
+            e.Handled = true;
+        }
+    }
+
+    private void TaskBoardCard_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed
+            || sender is not FrameworkElement { DataContext: TaskItem task } card)
+        {
+            return;
+        }
+
+        ViewModel.SelectedTask = task;
+        var data = new DataObject();
+        data.SetData(TaskDataFormat, task);
+        DragDrop.DoDragDrop(card, data, DragDropEffects.Move);
+    }
+
+    private void TagTaskBucket_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = TryGetDraggedTask(e, out var task)
+                    && task is not null
+                    && sender is FrameworkElement { DataContext: TaskBucketViewModel bucket }
+                    && ViewModel.IsTaskVisibleInBucket(bucket, task)
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void TagTaskBucket_Drop(object sender, DragEventArgs e)
+    {
+        if (!TryGetDraggedTask(e, out var task)
+            || task is null
+            || sender is not FrameworkElement { DataContext: TaskBucketViewModel bucket }
+            || !ViewModel.IsTaskVisibleInBucket(bucket, task))
+        {
+            return;
+        }
+
+        var targetTask = GetTaskFromDropTarget(e.OriginalSource);
+        if (targetTask is not null && !ViewModel.IsTaskVisibleInBucket(bucket, targetTask))
+        {
+            targetTask = null;
+        }
+
+        ViewModel.MoveTask(task, targetTask == task ? null : targetTask, ShouldInsertAfter(e, targetTask));
+        e.Handled = true;
+    }
+
+    private void StatusTaskBucket_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = TryGetDraggedTask(e, out _)
+                    && sender is FrameworkElement { DataContext: TaskBucketViewModel { Key: TaskItemStatus } }
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void StatusTaskBucket_Drop(object sender, DragEventArgs e)
+    {
+        if (!TryGetDraggedTask(e, out var task)
+            || task is null
+            || sender is not FrameworkElement { DataContext: TaskBucketViewModel { Key: TaskItemStatus status } bucket })
+        {
+            return;
+        }
+
+        if (task.Status != status)
+        {
+            if (!StatusMessageWindow.TryPrompt(this, status, out var statusMessage))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            ViewModel.SetTaskStatus(task, status, statusMessage);
+        }
+
+        var targetTask = GetTaskFromDropTarget(e.OriginalSource);
+        if (targetTask is not null && !ViewModel.IsTaskVisibleInBucket(bucket, targetTask))
+        {
+            targetTask = null;
+        }
+
+        ViewModel.MoveTask(task, targetTask == task ? null : targetTask, ShouldInsertAfter(e, targetTask));
+        e.Handled = true;
+    }
+
     private void TasksGrid_PreviewDragOver(object sender, DragEventArgs e)
     {
         e.Effects = TryGetDraggedEmail(e, out _)
@@ -379,6 +475,50 @@ public partial class MainWindow : Window
     {
         email = e.Data.GetData(EmailDataFormat) as EmailMessage;
         return email is not null;
+    }
+
+    private static bool TryGetDraggedTask(DragEventArgs e, out TaskItem? task)
+    {
+        task = e.Data.GetData(TaskDataFormat) as TaskItem;
+        return task is not null;
+    }
+
+    private static TaskItem? GetTaskFromDropTarget(object originalSource)
+    {
+        var current = originalSource as DependencyObject;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { DataContext: TaskItem task })
+            {
+                return task;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static bool ShouldInsertAfter(DragEventArgs e, TaskItem? targetTask)
+    {
+        if (targetTask is null)
+        {
+            return true;
+        }
+
+        var current = e.OriginalSource as DependencyObject;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { DataContext: TaskItem task } element
+                && ReferenceEquals(task, targetTask))
+            {
+                return e.GetPosition(element).Y > element.ActualHeight / 2;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return true;
     }
 
     private static bool HasDroppedEmailFiles(DragEventArgs e)

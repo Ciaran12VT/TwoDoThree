@@ -30,6 +30,7 @@ public sealed class MainViewModel : ObservableObject
     private EmailMessage? taskEmailFilter;
     private EmailMessage? selectedEmail;
     private TaskItem? selectedTask;
+    private TaskListViewMode taskListViewMode = TaskListViewMode.Grid;
     private bool isEmailSectionExpanded = true;
     private bool isTaskSectionExpanded = true;
 
@@ -80,6 +81,10 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<TaskItem> Tasks { get; } = new();
 
+    public ObservableCollection<TaskBucketViewModel> TagTaskBuckets { get; } = new();
+
+    public ObservableCollection<TaskBucketViewModel> StatusTaskBuckets { get; } = new();
+
     public ICollectionView EmailsView { get; }
 
     public ICollectionView TasksView { get; }
@@ -104,6 +109,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref taskSearchText, value))
             {
                 TasksView.Refresh();
+                RefreshTaskBuckets();
             }
         }
     }
@@ -118,6 +124,69 @@ public sealed class MainViewModel : ObservableObject
     {
         get => selectedTask;
         set => SetProperty(ref selectedTask, value);
+    }
+
+    public TaskListViewMode TaskListViewMode
+    {
+        get => taskListViewMode;
+        set
+        {
+            if (SetProperty(ref taskListViewMode, value))
+            {
+                OnPropertyChanged(nameof(IsGridTaskView));
+                OnPropertyChanged(nameof(IsTagBucketTaskView));
+                OnPropertyChanged(nameof(IsStatusKanbanTaskView));
+                RefreshTaskBuckets();
+            }
+        }
+    }
+
+    public bool IsGridTaskView
+    {
+        get => TaskListViewMode == TaskListViewMode.Grid;
+        set
+        {
+            if (value)
+            {
+                TaskListViewMode = TaskListViewMode.Grid;
+            }
+            else
+            {
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsTagBucketTaskView
+    {
+        get => TaskListViewMode == TaskListViewMode.TagBuckets;
+        set
+        {
+            if (value)
+            {
+                TaskListViewMode = TaskListViewMode.TagBuckets;
+            }
+            else
+            {
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsStatusKanbanTaskView
+    {
+        get => TaskListViewMode == TaskListViewMode.StatusKanban;
+        set
+        {
+            if (value)
+            {
+                TaskListViewMode = TaskListViewMode.StatusKanban;
+            }
+            else
+            {
+                OnPropertyChanged();
+            }
+        }
     }
 
     public bool IsEmailSectionExpanded
@@ -217,6 +286,7 @@ public sealed class MainViewModel : ObservableObject
         task.SetStatus(status, statusMessage);
         UpdateTaskTimeSpent(task);
         TasksView.Refresh();
+        RefreshTaskBuckets();
     }
 
     public void ActivateTask(TaskItem task)
@@ -224,11 +294,56 @@ public sealed class MainViewModel : ObservableObject
         SetTaskStatus(task, TaskItemStatus.Active);
     }
 
+    public void MoveTask(TaskItem task, TaskItem? targetTask, bool insertAfter)
+    {
+        var oldIndex = Tasks.IndexOf(task);
+        if (oldIndex < 0)
+        {
+            return;
+        }
+
+        var newIndex = targetTask is null
+            ? Tasks.Count - 1
+            : Tasks.IndexOf(targetTask);
+        if (newIndex < 0)
+        {
+            return;
+        }
+
+        if (insertAfter && targetTask is not null)
+        {
+            newIndex++;
+        }
+
+        if (oldIndex < newIndex)
+        {
+            newIndex--;
+        }
+
+        newIndex = Math.Clamp(newIndex, 0, Tasks.Count - 1);
+        if (oldIndex == newIndex)
+        {
+            return;
+        }
+
+        Tasks.Move(oldIndex, newIndex);
+        NormalizeTaskSortOrder();
+        SelectedTask = task;
+        TasksView.Refresh();
+        RefreshTaskBuckets();
+    }
+
+    public bool IsTaskVisibleInBucket(TaskBucketViewModel bucket, TaskItem task)
+    {
+        return bucket.Tasks.Contains(task);
+    }
+
     public void ReloadTasksFromStore()
     {
         FlushPendingTaskSaves();
         LoadTasksFromStore();
         RefreshEmailTaskAssociations();
+        RefreshTaskBuckets();
         TasksView.Refresh();
     }
 
@@ -319,6 +434,7 @@ public sealed class MainViewModel : ObservableObject
         {
             nextTaskId = 1001;
             TaskPersistenceStatus = "SQL Server storage is not configured.";
+            RefreshTaskBuckets();
             return;
         }
 
@@ -334,11 +450,13 @@ public sealed class MainViewModel : ObservableObject
             nextTaskId = Tasks.Count == 0 ? 1001 : Tasks.Max(task => task.Id) + 1;
             SelectedTask = Tasks.FirstOrDefault();
             TaskPersistenceStatus = $"Loaded {Tasks.Count} task{(Tasks.Count == 1 ? string.Empty : "s")} from SQL Server.";
+            RefreshTaskBuckets();
         }
         catch (Exception ex)
         {
             nextTaskId = 1001;
             TaskPersistenceStatus = $"SQL Server storage unavailable: {ex.Message}";
+            RefreshTaskBuckets();
         }
     }
 
@@ -487,6 +605,7 @@ public sealed class MainViewModel : ObservableObject
             Id = nextTaskId++,
             Title = title,
             Tags = tags,
+            SortOrder = Tasks.Count == 0 ? 0 : Tasks.Max(task => task.SortOrder) + 1,
             CreatedOn = now,
             UpdatedOn = now,
             TimeSpent = TimeSpan.Zero
@@ -500,6 +619,7 @@ public sealed class MainViewModel : ObservableObject
         UpdateTaskTimeSpent(task);
         Tasks.Add(task);
         RefreshEmailTaskAssociations();
+        RefreshTaskBuckets();
         QueueTaskSave(task);
     }
 
@@ -613,6 +733,71 @@ public sealed class MainViewModel : ObservableObject
                || Contains(task.Status.ToString(), TaskSearchText);
     }
 
+    private void RefreshTaskBuckets()
+    {
+        var visibleTasks = TasksView
+            .Cast<TaskItem>()
+            .OrderBy(task => task.SortOrder)
+            .ThenBy(task => task.Id)
+            .ToList();
+
+        TagTaskBuckets.Clear();
+        foreach (var tagGroup in visibleTasks
+                     .SelectMany(task => SplitTags(task.Tags).Select(tag => (Tag: tag, Task: task)))
+                     .GroupBy(item => item.Tag, StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            TagTaskBuckets.Add(new TaskBucketViewModel(
+                tagGroup.Key,
+                tagGroup.Key,
+                tagGroup.Select(item => item.Task)
+                    .Distinct()
+                    .OrderBy(task => task.SortOrder)
+                    .ThenBy(task => task.Id)));
+        }
+
+        StatusTaskBuckets.Clear();
+        foreach (var status in Enum.GetValues<TaskItemStatus>())
+        {
+            StatusTaskBuckets.Add(new TaskBucketViewModel(
+                FormatStatus(status),
+                status,
+                visibleTasks.Where(task => task.Status == status)));
+        }
+    }
+
+    private void NormalizeTaskSortOrder()
+    {
+        for (var index = 0; index < Tasks.Count; index++)
+        {
+            var task = Tasks[index];
+            if (task.SortOrder != index)
+            {
+                task.SortOrder = index;
+            }
+
+            QueueTaskSave(task);
+        }
+    }
+
+    private static IEnumerable<string> SplitTags(string tags)
+    {
+        return tags
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string FormatStatus(TaskItemStatus status)
+    {
+        return status switch
+        {
+            TaskItemStatus.InProgress => "In-Progress",
+            TaskItemStatus.OnHold => "On Hold",
+            _ => status.ToString()
+        };
+    }
+
     private static bool Contains(string value, string query)
     {
         return value.Contains(query, StringComparison.OrdinalIgnoreCase);
@@ -625,10 +810,11 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        if (e.PropertyName == nameof(TaskItem.Title))
+        if (e.PropertyName is nameof(TaskItem.Title) or nameof(TaskItem.Tags) or nameof(TaskItem.SortOrder))
         {
             RefreshEmailTaskAssociations();
             TasksView.Refresh();
+            RefreshTaskBuckets();
         }
 
         if (e.PropertyName == nameof(TaskItem.Status))
@@ -640,6 +826,7 @@ public sealed class MainViewModel : ObservableObject
 
             UpdateTaskTimeSpent(task);
             TasksView.Refresh();
+            RefreshTaskBuckets();
         }
 
         if (e.PropertyName != nameof(TaskItem.TimeSpent))
