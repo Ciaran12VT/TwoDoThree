@@ -25,6 +25,14 @@ public sealed class SettingsViewModel : ObservableObject
         };
         TagManager = new TagManagerViewModel(settings.Tags.Tags);
         Sections = new ObservableCollection<string> { "Email", "Tags" };
+        ConnectionStatus = GetDefaultConnectionStatus();
+        Email.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EmailSettings.Source))
+            {
+                ConnectionStatus = GetDefaultConnectionStatus();
+            }
+        };
     }
 
     public EmailSettings Email { get; }
@@ -72,6 +80,17 @@ public sealed class SettingsViewModel : ObservableObject
             SyncIntervalMinutes = Email.SyncIntervalMinutes,
             UseWindowsAuthentication = Email.UseWindowsAuthentication,
             MaxInboxMessages = Email.MaxInboxMessages
+        };
+    }
+
+    private string GetDefaultConnectionStatus()
+    {
+        return Email.Source switch
+        {
+            EmailSource.MicrosoftGraph => "Microsoft Graph selected. Enter the Entra client ID, then connect.",
+            EmailSource.ClassicOutlook => "Classic Outlook selected. The app will use the local default Outlook profile.",
+            EmailSource.ManualImport => "Manual import selected. Import .eml or .msg files from the main Email panel.",
+            _ => string.Empty
         };
     }
 }
