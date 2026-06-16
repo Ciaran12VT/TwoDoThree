@@ -13,7 +13,7 @@ public sealed class Surf2Launcher : ISurf2Launcher
         WriteIndented = false
     };
 
-    public Task OpenResourceAsync(
+    public async Task OpenResourceAsync(
         Surf2IntegrationSettings settings,
         SurfResourceLink resourceLink,
         CancellationToken cancellationToken = default)
@@ -66,8 +66,17 @@ public sealed class Surf2Launcher : ISurf2Launcher
         startInfo.ArgumentList.Add("--surf2-open-json");
         startInfo.ArgumentList.Add(encodedJson);
 
-        Process.Start(startInfo);
-        return Task.CompletedTask;
+        Process? process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException("Windows did not start the Surf2 process.");
+        }
+
+        await Task.Delay(TimeSpan.FromMilliseconds(750), cancellationToken);
+        if (process.HasExited && process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Surf2 exited before opening the resource. Exit code: {process.ExitCode}.");
+        }
     }
 
     private static string ResolveExecutablePath(Surf2IntegrationSettings settings)
