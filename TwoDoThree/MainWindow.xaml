@@ -7,6 +7,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="2do3"
+        Icon="Assets/AppIcon.ico"
         Height="780"
         Width="1180"
         MinHeight="620"
@@ -15,6 +16,40 @@
         <converters:StatusDisplayConverter x:Key="StatusDisplayConverter" />
         <converters:TaskStatusToBackgroundConverter x:Key="TaskStatusToBackgroundConverter" />
         <converters:TaskStatusToForegroundConverter x:Key="TaskStatusToForegroundConverter" />
+
+        <Style x:Key="RoundAddButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#16A34A" />
+            <Setter Property="BorderBrush" Value="#15803D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="17">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#22C55E" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#15803D" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -149,11 +184,15 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Margin="0,0,0,8">
+                    <DockPanel Margin="0,0,0,8" LastChildFill="False">
                         <Button DockPanel.Dock="Right"
-                                Width="90"
-                                Content="Add Task"
-                                Click="AddTaskButton_Click" />
+                                Style="{StaticResource RoundAddButtonStyle}"
+                                ToolTip="Add Task"
+                                Click="AddTaskButton_Click">
+                            <TextBlock Text="&#xE710;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16" />
+                        </Button>
                     </DockPanel>
 
                     <DataGrid x:Name="TasksGrid"

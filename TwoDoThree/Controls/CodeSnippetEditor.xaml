@@ -1,0 +1,35 @@
+<UserControl x:Class="TwoDoThree.Controls.CodeSnippetEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit">
+    <Grid>
+        <avalonEdit:TextEditor x:Name="Editor"
+                               ShowLineNumbers="True"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               Background="#111827"
+                               Foreground="#F9FAFB"
+                               LineNumbersForeground="#9CA3AF"
+                               HorizontalScrollBarVisibility="Auto"
+                               VerticalScrollBarVisibility="Auto"
+                               TextChanged="Editor_TextChanged">
+            <avalonEdit:TextEditor.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Language">
+                        <MenuItem Header="Plain Text" Tag="" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="C#" Tag="C#" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="XML" Tag="XML" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="HTML" Tag="HTML" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="CSS" Tag="CSS" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="JavaScript" Tag="JavaScript" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="PowerShell" Tag="PowerShell" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="C++" Tag="C++" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="Java" Tag="Java" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="PHP" Tag="PHP" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="VB" Tag="VBNET" Click="LanguageMenuItem_Click" />
+                    </MenuItem>
+                </ContextMenu>
+            </avalonEdit:TextEditor.ContextMenu>
+        </avalonEdit:TextEditor>
+    </Grid>
+</UserControl>

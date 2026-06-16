@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using TwoDoThree.Models;
 
@@ -16,9 +18,10 @@ public sealed class TaskDetailViewModel : ObservableObject
         Task = task;
         AddTextResourceCommand = new RelayCommand(_ => AddTextResource());
         AddCodeResourceCommand = new RelayCommand(_ => AddCodeResource());
-        AddImageResourceCommand = new RelayCommand(_ => AddFileResource(ResourceKind.Image));
+        AddImageResourceCommand = new RelayCommand(_ => AddImageResource());
         AddAudioResourceCommand = new RelayCommand(_ => AddFileResource(ResourceKind.Audio));
         AddSurfResourceCommand = new RelayCommand(_ => AddSurfResource());
+        SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null);
         AddActionCommand = new RelayCommand(_ => AddAction());
 
         RebuildResourceGroups();
@@ -43,7 +46,14 @@ public sealed class TaskDetailViewModel : ObservableObject
     public ResourceItem? SelectedResource
     {
         get => selectedResource;
-        set => SetProperty(ref selectedResource, value);
+        set
+        {
+            if (SetProperty(ref selectedResource, value)
+                && SaveSelectedResourceCommand is RelayCommand command)
+            {
+                command.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public ICommand AddTextResourceCommand { get; }
@@ -55,6 +65,8 @@ public sealed class TaskDetailViewModel : ObservableObject
     public ICommand AddAudioResourceCommand { get; }
 
     public ICommand AddSurfResourceCommand { get; }
+
+    public ICommand SaveSelectedResourceCommand { get; }
 
     public ICommand AddActionCommand { get; }
 
@@ -251,14 +263,155 @@ public sealed class TaskDetailViewModel : ObservableObject
         });
     }
 
+    private void SaveSelectedResource()
+    {
+        if (SelectedResource is null)
+        {
+            return;
+        }
+
+        var resource = SelectedResource;
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save resource",
+            FileName = GetDefaultFileName(resource),
+            Filter = GetSaveFilter(resource),
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (resource.Kind is ResourceKind.Image or ResourceKind.Audio
+            && File.Exists(resource.Content))
+        {
+            File.Copy(resource.Content, dialog.FileName, overwrite: true);
+        }
+        else
+        {
+            File.WriteAllText(dialog.FileName, resource.Content);
+        }
+    }
+
+    private static string GetDefaultFileName(ResourceItem resource)
+    {
+        var name = string.IsNullOrWhiteSpace(resource.Name) ? "Resource" : resource.Name;
+        var extension = resource.Kind switch
+        {
+            ResourceKind.CodeSnippet => GetCodeExtension(resource.CodeLanguage),
+            ResourceKind.Image => Path.GetExtension(resource.Content),
+            ResourceKind.Audio => Path.GetExtension(resource.Content),
+            _ => ".txt"
+        };
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".txt";
+        }
+
+        return Path.ChangeExtension(name, extension);
+    }
+
+    private static string GetSaveFilter(ResourceItem resource)
+    {
+        return resource.Kind switch
+        {
+            ResourceKind.CodeSnippet => "Code files|*.cs;*.xml;*.html;*.css;*.js;*.ps1;*.cpp;*.java;*.php;*.vb;*.txt|All files|*.*",
+            ResourceKind.Image => "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All files|*.*",
+            ResourceKind.Audio => "Audio files|*.mp3;*.wav;*.wma;*.m4a|All files|*.*",
+            _ => "Text files|*.txt|All files|*.*"
+        };
+    }
+
+    private static string GetCodeExtension(string language)
+    {
+        return language switch
+        {
+            "C#" => ".cs",
+            "XML" => ".xml",
+            "HTML" => ".html",
+            "CSS" => ".css",
+            "JavaScript" => ".js",
+            "PowerShell" => ".ps1",
+            "C++" => ".cpp",
+            "Java" => ".java",
+            "PHP" => ".php",
+            "VBNET" => ".vb",
+            _ => ".txt"
+        };
+    }
+
     private void AddCodeResource()
     {
         AddResource(new ResourceItem
         {
             Name = $"Code snippet {Task.Resources.Count(r => r.Kind == ResourceKind.CodeSnippet) + 1}",
             Kind = ResourceKind.CodeSnippet,
-            Content = "// Paste or type a useful code snippet here."
+            Content = "// Paste or type a useful code snippet here.",
+            CodeLanguage = "C#"
         });
+    }
+
+    private void AddImageResource()
+    {
+        if (TryAddClipboardImageResource())
+        {
+            return;
+        }
+
+        AddFileResource(ResourceKind.Image);
+    }
+
+    private bool TryAddClipboardImageResource()
+    {
+        try
+        {
+            if (!Clipboard.ContainsImage())
+            {
+                return false;
+            }
+
+            var image = Clipboard.GetImage();
+            if (image is null)
+            {
+                return false;
+            }
+
+            var resourceName = $"Clipboard image {Task.Resources.Count(r => r.Kind == ResourceKind.Image) + 1}";
+            var imagePath = SaveClipboardImage(image, resourceName);
+            AddResource(new ResourceItem
+            {
+                Name = resourceName,
+                Kind = ResourceKind.Image,
+                Content = imagePath
+            });
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string SaveClipboardImage(BitmapSource image, string resourceName)
+    {
+        var resourcesDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "2do3",
+            "Resources",
+            $"Task-{Task.Id}");
+        Directory.CreateDirectory(resourcesDirectory);
+
+        var imagePath = Path.Combine(resourcesDirectory, $"{resourceName}-{DateTime.Now:yyyyMMdd-HHmmssfff}.png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+
+        using var stream = File.Create(imagePath);
+        encoder.Save(stream);
+        return imagePath;
     }
 
     private void AddFileResource(ResourceKind kind)

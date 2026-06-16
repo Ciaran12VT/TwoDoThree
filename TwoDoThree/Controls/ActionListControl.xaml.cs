@@ -50,7 +50,7 @@ public partial class ActionListControl : UserControl
 
     private void ActionsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != (ModifierKeys.Control | ModifierKeys.Alt))
         {
             return;
         }
@@ -67,10 +67,10 @@ public partial class ActionListControl : UserControl
         switch (e.Key)
         {
             case Key.Left:
-                viewModel.IndentAction(action);
+                viewModel.UnindentAction(action);
                 break;
             case Key.Right:
-                viewModel.UnindentAction(action);
+                viewModel.IndentAction(action);
                 break;
             case Key.Up:
                 viewModel.MoveActionUp(action);

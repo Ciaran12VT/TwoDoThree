@@ -7,6 +7,7 @@ public sealed class ResourceItem : ObservableObject
     private string name = string.Empty;
     private ResourceKind kind;
     private string content = string.Empty;
+    private string codeLanguage = "C#";
 
     public string Name
     {
@@ -24,5 +25,11 @@ public sealed class ResourceItem : ObservableObject
     {
         get => content;
         set => SetProperty(ref content, value);
+    }
+
+    public string CodeLanguage
+    {
+        get => codeLanguage;
+        set => SetProperty(ref codeLanguage, value);
     }
 }

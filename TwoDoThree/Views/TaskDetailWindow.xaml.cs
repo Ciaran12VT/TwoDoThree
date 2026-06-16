@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using TwoDoThree.Models;
 using TwoDoThree.ViewModels;
 
@@ -21,6 +23,38 @@ public partial class TaskDetailWindow : Window
         if (e.NewValue is ResourceItem resource && DataContext is TaskDetailViewModel viewModel)
         {
             viewModel.SelectedResource = resource;
+        }
+    }
+
+    private void ResourceTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject) is { } item)
+        {
+            item.IsSelected = true;
+            item.Focus();
+        }
+    }
+
+    private void ResourceTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        RenameResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem;
+    }
+
+    private void RenameResourceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResourceTree.SelectedItem is not ResourceItem resource)
+        {
+            return;
+        }
+
+        var window = new RenameResourceWindow(resource.Name)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() == true)
+        {
+            resource.Name = window.ResourceName;
         }
     }
 
@@ -46,8 +80,38 @@ public partial class TaskDetailWindow : Window
         ToggleResourceTreeButton.Content = isResourceTreeVisible ? ">" : "<";
     }
 
+    private void TimeSpentTextBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount < 2 || DataContext is not TaskDetailViewModel viewModel)
+        {
+            return;
+        }
+
+        var window = new TaskStatusPeriodsWindow(viewModel.Task)
+        {
+            Owner = this
+        };
+
+        window.Show();
+    }
+
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 }

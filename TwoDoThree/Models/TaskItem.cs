@@ -8,7 +8,9 @@ public sealed class TaskItem : ObservableObject
     private int id;
     private string title = string.Empty;
     private string tags = string.Empty;
-    private TaskStatus status;
+    private TaskStatus status = TaskStatus.Inactive;
+    private TaskStatus statusBeforeActive = TaskStatus.Inactive;
+    private DateTime? dueBy;
     private DateTime createdOn = DateTime.Now;
     private DateTime updatedOn = DateTime.Now;
     private TimeSpan timeSpent;
@@ -48,7 +50,34 @@ public sealed class TaskItem : ObservableObject
         get => status;
         set
         {
+            var previousStatus = status;
+            if (previousStatus == value)
+            {
+                return;
+            }
+
+            if (value == TaskStatus.Active)
+            {
+                statusBeforeActive = previousStatus;
+                OnPropertyChanged(nameof(StatusBeforeActive));
+            }
+
             if (SetProperty(ref status, value))
+            {
+                UpdatedOn = DateTime.Now;
+                AddStatusChangeActivity(previousStatus, value);
+            }
+        }
+    }
+
+    public TaskStatus StatusBeforeActive => statusBeforeActive;
+
+    public DateTime? DueBy
+    {
+        get => dueBy;
+        set
+        {
+            if (SetProperty(ref dueBy, value))
             {
                 UpdatedOn = DateTime.Now;
             }
@@ -76,4 +105,36 @@ public sealed class TaskItem : ObservableObject
     public ObservableCollection<ResourceItem> Resources { get; } = new();
 
     public ObservableCollection<ActionItem> Actions { get; } = new();
+
+    public ObservableCollection<TaskActivity> Activities { get; } = new();
+
+    public void AddActivity(string activity)
+    {
+        Activities.Add(new TaskActivity
+        {
+            OccurredOn = DateTime.Now,
+            Activity = activity
+        });
+    }
+
+    private void AddStatusChangeActivity(TaskStatus fromStatus, TaskStatus toStatus)
+    {
+        Activities.Add(new TaskActivity
+        {
+            OccurredOn = DateTime.Now,
+            Activity = $"Status changed from {FormatStatus(fromStatus)} to {FormatStatus(toStatus)}.",
+            FromStatus = fromStatus,
+            ToStatus = toStatus
+        });
+    }
+
+    private static string FormatStatus(TaskStatus taskStatus)
+    {
+        return taskStatus switch
+        {
+            TaskStatus.InProgress => "In-Progress",
+            TaskStatus.OnHold => "On Hold",
+            _ => taskStatus.ToString()
+        };
+    }
 }

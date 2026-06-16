@@ -170,21 +170,21 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0" Text="Ctrl + Left" FontWeight="SemiBold" />
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Indent" />
-                                <TextBlock Grid.Row="1" Text="Ctrl + Right" FontWeight="SemiBold" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Unindent" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="2" Text="Ctrl + Up" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="0" Text="Ctrl + Alt + Left" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Unindent" />
+                                <TextBlock Grid.Row="1" Text="Ctrl + Alt + Right" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Indent" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="2" Text="Ctrl + Alt + Up" FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="Move row up" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="3" Text="Ctrl + Down" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="3" Text="Ctrl + Alt + Down" FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="Move row down" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="4" Text="Ctrl + Delete" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="4" Text="Ctrl + Alt + Delete" FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="4" Grid.Column="1" Text="Delete row" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="5" Text="Ctrl + Enter" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="5" Text="Ctrl + Alt + Enter" FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="Add row below" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="6" Text="Ctrl + ." FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="6" Text="Ctrl + Alt + ." FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="Cycle status forward" Margin="0,4,0,0" />
-                                <TextBlock Grid.Row="7" Text="Ctrl + ," FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="7" Text="Ctrl + Alt + ," FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="7" Grid.Column="1" Text="Cycle status backward" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="8" Text="Down" FontWeight="SemiBold" Margin="0,4,0,0" />
                                 <TextBlock Grid.Row="8" Grid.Column="1" Text="From last text line, move to next row" TextWrapping="Wrap" Margin="0,4,0,0" />

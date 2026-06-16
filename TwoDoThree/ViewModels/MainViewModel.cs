@@ -1,13 +1,17 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows.Threading;
 using System.Windows.Data;
 using TwoDoThree.Models;
+using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
 namespace TwoDoThree.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
     private readonly List<EmailMessage> configuredAccountMessages = new();
+    private readonly DispatcherTimer activeTaskTimer;
+    private bool isEnforcingActiveTask;
     private int nextTaskId = 1004;
     private string searchText = string.Empty;
     private EmailMessage? selectedEmail;
@@ -26,6 +30,14 @@ public sealed class MainViewModel : ObservableObject
         SeedInbox();
         RefreshEmails();
         SeedTasks();
+        RecalculateAllTaskTimeSpent();
+
+        activeTaskTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        activeTaskTimer.Tick += (_, _) => UpdateActiveTaskTimeSpent();
+        activeTaskTimer.Start();
     }
 
     public AppSettings Settings { get; }
@@ -78,7 +90,8 @@ public sealed class MainViewModel : ObservableObject
     public TaskItem CreateEmptyTask()
     {
         var task = CreateTask("New task", "manual");
-        Tasks.Add(task);
+        AddDefaultNotesResource(task);
+        AddTask(task);
         SelectedTask = task;
         TasksView.Refresh();
         return task;
@@ -96,10 +109,22 @@ public sealed class MainViewModel : ObservableObject
         task.Actions.Add(new ActionItem { ActionText = "Review the email and define the next step" });
         TaskDetailViewModel.RenumberActions(task.Actions);
 
-        Tasks.Add(task);
+        AddTask(task);
         SelectedTask = task;
         TasksView.Refresh();
         return task;
+    }
+
+    public void SetTaskStatus(TaskItem task, TaskItemStatus status)
+    {
+        task.Status = status;
+        UpdateTaskTimeSpent(task);
+        TasksView.Refresh();
+    }
+
+    public void ActivateTask(TaskItem task)
+    {
+        SetTaskStatus(task, TaskItemStatus.Active);
     }
 
     public void RefreshEmails()
@@ -130,6 +155,24 @@ public sealed class MainViewModel : ObservableObject
             UpdatedOn = now,
             TimeSpent = TimeSpan.Zero
         };
+    }
+
+    private void AddTask(TaskItem task)
+    {
+        task.PropertyChanged += Task_PropertyChanged;
+        task.AddActivity("Task created with status Inactive.");
+        UpdateTaskTimeSpent(task);
+        Tasks.Add(task);
+    }
+
+    private static void AddDefaultNotesResource(TaskItem task)
+    {
+        task.Resources.Add(new ResourceItem
+        {
+            Name = "Notes",
+            Kind = ResourceKind.Text,
+            Content = string.Empty
+        });
     }
 
     private bool FilterEmail(object item)
@@ -210,7 +253,6 @@ public sealed class MainViewModel : ObservableObject
     private void SeedTasks()
     {
         var task = CreateTask("Prepare onboarding task flow", "onboarding, process");
-        task.Status = TwoDoThree.Models.TaskStatus.InProgress;
         task.Resources.Add(new ResourceItem
         {
             Name = "Initial notes",
@@ -227,7 +269,103 @@ public sealed class MainViewModel : ObservableObject
         task.Actions.Add(new ActionItem { ActionText = "Add resource viewer", IndentLevel = 1, Status = ActionStatus.InProgress });
         task.Actions.Add(new ActionItem { ActionText = "Verify action numbering", Status = ActionStatus.NotStarted });
         TaskDetailViewModel.RenumberActions(task.Actions);
-        Tasks.Add(task);
+        AddTask(task);
+        SetTaskStatus(task, TaskItemStatus.InProgress);
         SelectedTask = task;
+    }
+
+    private void Task_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not TaskItem task || e.PropertyName != nameof(TaskItem.Status))
+        {
+            return;
+        }
+
+        if (!isEnforcingActiveTask && task.Status == TaskItemStatus.Active)
+        {
+            EnforceSingleActiveTask(task);
+        }
+
+        UpdateTaskTimeSpent(task);
+        TasksView.Refresh();
+    }
+
+    private void EnforceSingleActiveTask(TaskItem activeTask)
+    {
+        isEnforcingActiveTask = true;
+
+        try
+        {
+            foreach (var task in Tasks.Where(task => !ReferenceEquals(task, activeTask) && task.Status == TaskItemStatus.Active).ToList())
+            {
+                var restoreStatus = task.StatusBeforeActive == TaskItemStatus.Active
+                    ? TaskItemStatus.Inactive
+                    : task.StatusBeforeActive;
+
+                task.Status = restoreStatus;
+                UpdateTaskTimeSpent(task);
+            }
+        }
+        finally
+        {
+            isEnforcingActiveTask = false;
+        }
+    }
+
+    private void RecalculateAllTaskTimeSpent()
+    {
+        var now = DateTime.Now;
+        foreach (var task in Tasks)
+        {
+            UpdateTaskTimeSpent(task, now);
+        }
+    }
+
+    private void UpdateActiveTaskTimeSpent()
+    {
+        if (Tasks.FirstOrDefault(task => task.Status == TaskItemStatus.Active) is not { } activeTask)
+        {
+            return;
+        }
+
+        UpdateTaskTimeSpent(activeTask);
+    }
+
+    private static void UpdateTaskTimeSpent(TaskItem task)
+    {
+        UpdateTaskTimeSpent(task, DateTime.Now);
+    }
+
+    private static void UpdateTaskTimeSpent(TaskItem task, DateTime now)
+    {
+        task.TimeSpent = CalculateTimeSpent(task, now);
+    }
+
+    private static TimeSpan CalculateTimeSpent(TaskItem task, DateTime now)
+    {
+        var total = TimeSpan.Zero;
+        DateTime? activeStartedOn = null;
+
+        foreach (var activity in task.Activities
+                     .Where(activity => activity.FromStatus.HasValue || activity.ToStatus.HasValue)
+                     .OrderBy(activity => activity.OccurredOn))
+        {
+            if (activity.ToStatus == TaskItemStatus.Active)
+            {
+                activeStartedOn = activity.OccurredOn;
+            }
+            else if (activity.FromStatus == TaskItemStatus.Active && activeStartedOn.HasValue)
+            {
+                total += activity.OccurredOn - activeStartedOn.Value;
+                activeStartedOn = null;
+            }
+        }
+
+        if (task.Status == TaskItemStatus.Active && activeStartedOn.HasValue)
+        {
+            total += now - activeStartedOn.Value;
+        }
+
+        return TimeSpan.FromSeconds(Math.Max(0, Math.Floor(total.TotalSeconds)));
     }
 }

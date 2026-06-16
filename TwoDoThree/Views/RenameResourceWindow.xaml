@@ -1,0 +1,45 @@
+<Window x:Class="TwoDoThree.Views.RenameResourceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rename Resource"
+        Icon="../Assets/AppIcon.ico"
+        Height="170"
+        Width="420"
+        MinHeight="170"
+        MinWidth="360"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Resource name"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,6" />
+        <TextBox x:Name="ResourceNameTextBox"
+                 Grid.Row="1"
+                 Text="{Binding ResourceName, UpdateSourceTrigger=PropertyChanged}"
+                 GotKeyboardFocus="ResourceNameTextBox_GotKeyboardFocus" />
+        <TextBlock Grid.Row="2"
+                   Text="Enter a non-empty name for this resource."
+                   Foreground="{StaticResource MutedTextBrush}"
+                   Margin="0,8,0,0" />
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="84"
+                    Content="Cancel"
+                    Click="CancelButton_Click" />
+            <Button Width="84"
+                    Margin="8,0,0,0"
+                    Content="Rename"
+                    IsDefault="True"
+                    Click="RenameButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

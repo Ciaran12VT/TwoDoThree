@@ -11,6 +11,8 @@ namespace TwoDoThree;
 
 public partial class MainWindow : Window
 {
+    private readonly List<TaskDetailWindow> openTaskDetailWindows = new();
+
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
     public MainWindow()
@@ -34,14 +36,14 @@ public partial class MainWindow : Window
 
     private void AddTaskButton_Click(object sender, RoutedEventArgs e)
     {
-        OpenTaskDetail(ViewModel.CreateEmptyTask(), activate: true);
+        OpenTaskDetail(ViewModel.CreateEmptyTask(), activate: false);
     }
 
     private void CreateTaskFromEmailMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.SelectedEmail is EmailMessage email)
         {
-            OpenTaskDetail(ViewModel.CreateTaskFromEmail(email), activate: true);
+            OpenTaskDetail(ViewModel.CreateTaskFromEmail(email), activate: false);
         }
     }
 
@@ -57,7 +59,7 @@ public partial class MainWindow : Window
     {
         if (TasksGrid.SelectedItem is TaskItem task)
         {
-            OpenTaskDetail(task, activate: true);
+            OpenTaskDetail(task, activate: !HasOpenTaskDetailWindows);
         }
     }
 
@@ -83,8 +85,7 @@ public partial class MainWindow : Window
         if (sender is MenuItem { Tag: TaskItemStatus status }
             && ViewModel.SelectedTask is { } task)
         {
-            task.Status = status;
-            ViewModel.TasksView.Refresh();
+            ViewModel.SetTaskStatus(task, status);
         }
     }
 
@@ -92,7 +93,7 @@ public partial class MainWindow : Window
     {
         if (activate)
         {
-            task.Status = TaskItemStatus.Active;
+            ViewModel.ActivateTask(task);
         }
 
         var window = new TaskDetailWindow(task)
@@ -100,8 +101,23 @@ public partial class MainWindow : Window
             Owner = this
         };
 
-        window.ShowDialog();
-        ViewModel.TasksView.Refresh();
+        openTaskDetailWindows.Add(window);
+        window.Closed += (_, _) =>
+        {
+            openTaskDetailWindows.Remove(window);
+            ViewModel.TasksView.Refresh();
+        };
+
+        window.Show();
+    }
+
+    private bool HasOpenTaskDetailWindows
+    {
+        get
+        {
+            openTaskDetailWindows.RemoveAll(window => !window.IsVisible);
+            return openTaskDetailWindows.Count > 0;
+        }
     }
 
     private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
