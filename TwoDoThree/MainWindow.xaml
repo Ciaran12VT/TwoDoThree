@@ -1,7 +1,9 @@
 <Window x:Class="TwoDoThree.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:TwoDoThree.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:models="clr-namespace:TwoDoThree.Models"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="2do3"
@@ -9,6 +11,12 @@
         Width="1180"
         MinHeight="620"
         MinWidth="920">
+    <Window.Resources>
+        <converters:StatusDisplayConverter x:Key="StatusDisplayConverter" />
+        <converters:TaskStatusToBackgroundConverter x:Key="TaskStatusToBackgroundConverter" />
+        <converters:TaskStatusToForegroundConverter x:Key="TaskStatusToForegroundConverter" />
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -155,11 +163,49 @@
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               IsReadOnly="True"
+                              PreviewMouseRightButtonDown="TasksGrid_PreviewMouseRightButtonDown"
                               MouseDoubleClick="TasksGrid_MouseDoubleClick">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Peek"
+                                          Click="PeekTaskMenuItem_Click" />
+                                <Separator />
+                                <MenuItem Header="Status">
+                                    <MenuItem Header="Inactive"
+                                              Tag="{x:Static models:TaskStatus.Inactive}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="Active"
+                                              Tag="{x:Static models:TaskStatus.Active}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="In-Progress"
+                                              Tag="{x:Static models:TaskStatus.InProgress}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="On Hold"
+                                              Tag="{x:Static models:TaskStatus.OnHold}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="Blocked"
+                                              Tag="{x:Static models:TaskStatus.Blocked}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="Complete"
+                                              Tag="{x:Static models:TaskStatus.Complete}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                    <MenuItem Header="Cancelled"
+                                              Tag="{x:Static models:TaskStatus.Cancelled}"
+                                              Click="SetTaskStatusMenuItem_Click" />
+                                </MenuItem>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                        <DataGrid.RowStyle>
+                            <Style TargetType="{x:Type DataGridRow}">
+                                <Setter Property="Background" Value="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}" />
+                                <Setter Property="Foreground" Value="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}" />
+                            </Style>
+                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="ID" Width="70" Binding="{Binding Id}" />
                             <DataGridTextColumn Header="Title" Width="2*" Binding="{Binding Title}" />
                             <DataGridTextColumn Header="Tags" Width="*" Binding="{Binding Tags}" />
+                            <DataGridTextColumn Header="Status" Width="120" Binding="{Binding Status, Converter={StaticResource StatusDisplayConverter}}" />
                             <DataGridTextColumn Header="CreatedOn" Width="150" Binding="{Binding CreatedOn, StringFormat={}{0:g}}" />
                             <DataGridTextColumn Header="UpdatedOn" Width="150" Binding="{Binding UpdatedOn, StringFormat={}{0:g}}" />
                             <DataGridTextColumn Header="Time Spent" Width="120" Binding="{Binding TimeSpent}" />

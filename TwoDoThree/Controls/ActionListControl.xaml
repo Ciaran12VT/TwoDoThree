@@ -5,6 +5,108 @@
     <UserControl.Resources>
         <converters:ActionStatusToBrushConverter x:Key="ActionStatusToBrushConverter" />
         <converters:IndentToMarginConverter x:Key="IndentToMarginConverter" />
+
+        <Style x:Key="RoundAddButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#16A34A" />
+            <Setter Property="BorderBrush" Value="#15803D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="17">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#22C55E" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#15803D" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RoundOptionsButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="BorderBrush" Value="#1D4ED8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#3B82F6" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1D4ED8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RoundInfoButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#2563EB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#2563EB" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="17">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#EFF6FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#DBEAFE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -13,16 +115,94 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <DockPanel Margin="0,0,0,8">
+        <DockPanel Margin="0,0,0,8" LastChildFill="False">
             <TextBlock Text="Action List"
                        FontSize="16"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center" />
-            <Button DockPanel.Dock="Right"
-                    Width="100"
-                    Height="30"
-                    Content="Add Action"
-                    Command="{Binding AddActionCommand}" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="ActionShortcutsInfoButton"
+                        Style="{StaticResource RoundInfoButtonStyle}"
+                        ToolTip="Keyboard shortcuts"
+                        Click="ActionShortcutsInfoButton_Click">
+                    <TextBlock Text="&#xE946;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="15" />
+                </Button>
+                <Popup x:Name="ActionShortcutsPopup"
+                       PlacementTarget="{Binding ElementName=ActionShortcutsInfoButton}"
+                       Placement="Bottom"
+                       HorizontalOffset="-294"
+                       VerticalOffset="8"
+                       AllowsTransparency="True"
+                       StaysOpen="False">
+                    <Border Width="330"
+                            Padding="14"
+                            Background="#FFFFFF"
+                            BorderBrush="#9CA3AF"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12"
+                                              Direction="270"
+                                              Opacity="0.18"
+                                              ShadowDepth="3" />
+                        </Border.Effect>
+                        <StackPanel>
+                            <TextBlock Text="Action List Shortcuts"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="Ctrl + Left" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Indent" />
+                                <TextBlock Grid.Row="1" Text="Ctrl + Right" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Unindent" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="2" Text="Ctrl + Up" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Move row up" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="3" Text="Ctrl + Down" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="Move row down" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="4" Text="Ctrl + Delete" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Delete row" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="5" Text="Ctrl + Enter" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="Add row below" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="6" Text="Ctrl + ." FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Cycle status forward" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="7" Text="Ctrl + ," FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="Cycle status backward" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="8" Text="Down" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="From last text line, move to next row" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="9" Text="Up" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Grid.Row="9" Grid.Column="1" Text="From first text line, move to previous row" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+                <Button Style="{StaticResource RoundAddButtonStyle}"
+                        ToolTip="Add Action"
+                        Margin="8,0,0,0"
+                        Command="{Binding AddActionCommand}">
+                    <TextBlock Text="&#xE710;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="16" />
+                </Button>
+            </StackPanel>
         </DockPanel>
 
         <DataGrid x:Name="ActionsGrid"
@@ -31,13 +211,17 @@
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
                   CanUserDeleteRows="False"
+                  SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
                   HeadersVisibility="Column"
                   GridLinesVisibility="Horizontal"
                   RowHeaderWidth="0"
-                  SelectionMode="Single">
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  PreviewKeyDown="ActionsGrid_PreviewKeyDown">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ActionNumber"
-                                    Width="120"
+                <DataGridTextColumn Header="#"
+                                    Width="SizeToCells"
+                                    MinWidth="34"
                                     IsReadOnly="True"
                                     Binding="{Binding ActionNumber}" />
                 <DataGridTemplateColumn Header="ActionText" Width="*">
@@ -52,18 +236,23 @@
                                          BorderThickness="0"
                                          Background="Transparent"
                                          TextWrapping="Wrap"
-                                         MinHeight="24" />
+                                         MinHeight="24"
+                                         GotKeyboardFocus="ActionTextBox_GotKeyboardFocus"
+                                         PreviewKeyDown="ActionTextBox_PreviewKeyDown" />
                             </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="ActionOptions" Width="130">
+                <DataGridTemplateColumn Header="" Width="SizeToCells" MinWidth="42">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Button Content="Options"
-                                    Width="88"
-                                    Height="28"
-                                    Click="ActionOptionsButton_Click" />
+                            <Button Style="{StaticResource RoundOptionsButtonStyle}"
+                                    ToolTip="Options"
+                                    Click="ActionOptionsButton_Click">
+                                <TextBlock Text="&#xE700;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="13" />
+                            </Button>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

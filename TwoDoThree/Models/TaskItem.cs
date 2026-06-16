@@ -8,6 +8,7 @@ public sealed class TaskItem : ObservableObject
     private int id;
     private string title = string.Empty;
     private string tags = string.Empty;
+    private TaskStatus status;
     private DateTime createdOn = DateTime.Now;
     private DateTime updatedOn = DateTime.Now;
     private TimeSpan timeSpent;
@@ -36,6 +37,18 @@ public sealed class TaskItem : ObservableObject
         set
         {
             if (SetProperty(ref tags, value))
+            {
+                UpdatedOn = DateTime.Now;
+            }
+        }
+    }
+
+    public TaskStatus Status
+    {
+        get => status;
+        set
+        {
+            if (SetProperty(ref status, value))
             {
                 UpdatedOn = DateTime.Now;
             }

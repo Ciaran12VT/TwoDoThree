@@ -8,6 +8,7 @@ namespace TwoDoThree.Views;
 public partial class TaskDetailWindow : Window
 {
     private bool isResourceTreeVisible = true;
+    private GridLength expandedResourcePaneWidth = new(292);
 
     public TaskDetailWindow(TaskItem task)
     {
@@ -27,9 +28,18 @@ public partial class TaskDetailWindow : Window
     {
         isResourceTreeVisible = !isResourceTreeVisible;
 
-        ResourceTreeColumn.Width = isResourceTreeVisible
-            ? new GridLength(260)
-            : new GridLength(0);
+        if (!isResourceTreeVisible)
+        {
+            expandedResourcePaneWidth = ResourcePaneColumn.ActualWidth > 40
+                ? new GridLength(ResourcePaneColumn.ActualWidth)
+                : new GridLength(292);
+        }
+
+        ResourcePaneColumn.Width = isResourceTreeVisible
+            ? expandedResourcePaneWidth
+            : new GridLength(32);
+        ResourcePaneColumn.MinWidth = isResourceTreeVisible ? 180 : 32;
+        ResourceTreeColumn.Width = isResourceTreeVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         ResourceTreePanel.Visibility = isResourceTreeVisible ? Visibility.Visible : Visibility.Collapsed;
         ResourceGridSplitter.Visibility = isResourceTreeVisible ? Visibility.Visible : Visibility.Collapsed;
         ResourceSplitterColumn.Width = isResourceTreeVisible ? GridLength.Auto : new GridLength(0);

@@ -9,6 +9,7 @@ namespace TwoDoThree.ViewModels;
 public sealed class TaskDetailViewModel : ObservableObject
 {
     private ResourceItem? selectedResource;
+    private ActionItem? selectedAction;
 
     public TaskDetailViewModel(TaskItem task)
     {
@@ -27,9 +28,17 @@ public sealed class TaskDetailViewModel : ObservableObject
 
     public TaskItem Task { get; }
 
+    public IReadOnlyList<TwoDoThree.Models.TaskStatus> TaskStatusValues { get; } = Enum.GetValues<TwoDoThree.Models.TaskStatus>();
+
     public ObservableCollection<ActionItem> Actions => Task.Actions;
 
     public ObservableCollection<ResourceGroup> ResourceGroups { get; } = new();
+
+    public ActionItem? SelectedAction
+    {
+        get => selectedAction;
+        set => SetProperty(ref selectedAction, value);
+    }
 
     public ResourceItem? SelectedResource
     {
@@ -148,19 +157,88 @@ public sealed class TaskDetailViewModel : ObservableObject
         TouchTask();
     }
 
-    private void AddAction()
+    public void DeleteAction(ActionItem action)
     {
-        var indent = Actions.Count > 0 ? Actions[^1].IndentLevel : 0;
-        var action = new ActionItem
+        var index = Actions.IndexOf(action);
+        if (index < 0)
         {
-            ActionText = "New action",
-            IndentLevel = indent,
-            Status = ActionStatus.NotStarted
-        };
+            return;
+        }
 
-        Actions.Add(action);
+        Actions.RemoveAt(index);
         TouchTask();
         RenumberActions(Actions);
+        SelectedAction = Actions.Count == 0
+            ? null
+            : Actions[Math.Min(index, Actions.Count - 1)];
+    }
+
+    public void AddActionBelow(ActionItem action)
+    {
+        var index = Actions.IndexOf(action);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var newAction = CreateAction(action.IndentLevel);
+        Actions.Insert(index + 1, newAction);
+        SelectedAction = newAction;
+        TouchTask();
+        RenumberActions(Actions);
+    }
+
+    public void CycleActionStatus(ActionItem action, int direction)
+    {
+        var statuses = Enum.GetValues<ActionStatus>();
+        var index = Array.IndexOf(statuses, action.Status);
+        if (index < 0)
+        {
+            index = 0;
+        }
+
+        var nextIndex = (index + direction + statuses.Length) % statuses.Length;
+        SetActionStatus(action, statuses[nextIndex]);
+    }
+
+    private void AddAction()
+    {
+        if (SelectedAction is { } selected)
+        {
+            AddChildAction(selected);
+            return;
+        }
+
+        var action = CreateAction(0);
+        Actions.Add(action);
+        SelectedAction = action;
+        TouchTask();
+        RenumberActions(Actions);
+    }
+
+    private void AddChildAction(ActionItem parent)
+    {
+        var index = Actions.IndexOf(parent);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var action = CreateAction(parent.IndentLevel + 1);
+        Actions.Insert(index + 1, action);
+        SelectedAction = action;
+        TouchTask();
+        RenumberActions(Actions);
+    }
+
+    private static ActionItem CreateAction(int indentLevel)
+    {
+        return new ActionItem
+        {
+            ActionText = "New action",
+            IndentLevel = indentLevel,
+            Status = ActionStatus.NotStarted
+        };
     }
 
     private void AddTextResource()

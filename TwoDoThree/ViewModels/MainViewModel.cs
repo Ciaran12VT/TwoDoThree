@@ -164,7 +164,8 @@ public sealed class MainViewModel : ObservableObject
 
         return task.Id.ToString().Contains(SearchText, StringComparison.OrdinalIgnoreCase)
                || Contains(task.Title, SearchText)
-               || Contains(task.Tags, SearchText);
+               || Contains(task.Tags, SearchText)
+               || Contains(task.Status.ToString(), SearchText);
     }
 
     private static bool Contains(string value, string query)
@@ -209,6 +210,7 @@ public sealed class MainViewModel : ObservableObject
     private void SeedTasks()
     {
         var task = CreateTask("Prepare onboarding task flow", "onboarding, process");
+        task.Status = TwoDoThree.Models.TaskStatus.InProgress;
         task.Resources.Add(new ResourceItem
         {
             Name = "Initial notes",

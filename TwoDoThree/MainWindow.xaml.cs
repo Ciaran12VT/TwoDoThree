@@ -5,6 +5,7 @@ using System.Windows.Media;
 using TwoDoThree.Models;
 using TwoDoThree.ViewModels;
 using TwoDoThree.Views;
+using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
 namespace TwoDoThree;
 
@@ -33,14 +34,14 @@ public partial class MainWindow : Window
 
     private void AddTaskButton_Click(object sender, RoutedEventArgs e)
     {
-        OpenTaskDetail(ViewModel.CreateEmptyTask());
+        OpenTaskDetail(ViewModel.CreateEmptyTask(), activate: true);
     }
 
     private void CreateTaskFromEmailMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.SelectedEmail is EmailMessage email)
         {
-            OpenTaskDetail(ViewModel.CreateTaskFromEmail(email));
+            OpenTaskDetail(ViewModel.CreateTaskFromEmail(email), activate: true);
         }
     }
 
@@ -56,12 +57,44 @@ public partial class MainWindow : Window
     {
         if (TasksGrid.SelectedItem is TaskItem task)
         {
-            OpenTaskDetail(task);
+            OpenTaskDetail(task, activate: true);
         }
     }
 
-    private void OpenTaskDetail(TaskItem task)
+    private void TasksGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject) is { } row)
+        {
+            row.IsSelected = true;
+            row.Focus();
+        }
+    }
+
+    private void PeekTaskMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedTask is { } task)
+        {
+            OpenTaskDetail(task, activate: false);
+        }
+    }
+
+    private void SetTaskStatusMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: TaskItemStatus status }
+            && ViewModel.SelectedTask is { } task)
+        {
+            task.Status = status;
+            ViewModel.TasksView.Refresh();
+        }
+    }
+
+    private void OpenTaskDetail(TaskItem task, bool activate)
+    {
+        if (activate)
+        {
+            task.Status = TaskItemStatus.Active;
+        }
+
         var window = new TaskDetailWindow(task)
         {
             Owner = this
