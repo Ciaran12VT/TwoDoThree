@@ -36,8 +36,11 @@ public partial class MainWindow : Window
         var classicProvider = new ClassicOutlookEmailProvider(emailCacheStore);
         var emailProvider = new CompositeEmailProvider(graphProvider, classicProvider, emailCacheStore);
         var emailImportService = new EmailImportService();
-        DataContext = new MainViewModel(settingsStore.Load(), emailProvider, emailImportService, emailCacheStore);
+        var settings = settingsStore.Load();
+        var taskStore = new SqlServerTaskStore(settings.Database);
+        DataContext = new MainViewModel(settings, emailProvider, emailImportService, emailCacheStore, taskStore);
         Loaded += MainWindow_Loaded;
+        Closing += MainWindow_Closing;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -49,6 +52,7 @@ public partial class MainWindow : Window
     {
         var originalClientId = ViewModel.Settings.Email.ClientId;
         var originalTenantId = ViewModel.Settings.Email.TenantId;
+        var originalConnectionString = ViewModel.Settings.Database.ConnectionString;
         var window = new SettingsWindow(
             ViewModel.Settings,
             settingsStore,
@@ -69,9 +73,29 @@ public partial class MainWindow : Window
             }
 
             settingsStore.Save(ViewModel.Settings);
+            if (!string.Equals(originalConnectionString, ViewModel.Settings.Database.ConnectionString, StringComparison.Ordinal))
+            {
+                var shouldReloadTasks = true;
+                if (string.IsNullOrWhiteSpace(originalConnectionString)
+                    && !string.IsNullOrWhiteSpace(ViewModel.Settings.Database.ConnectionString))
+                {
+                    shouldReloadTasks = ViewModel.SaveAllTasksToStore();
+                }
+
+                if (shouldReloadTasks)
+                {
+                    ViewModel.ReloadTasksFromStore();
+                }
+            }
+
             ViewModel.UpdateEmailSyncInterval();
             await ViewModel.RefreshEmailsAsync(this, allowInteractiveSignIn: false);
         }
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        ViewModel.FlushPendingTaskSaves();
     }
 
     private async void RefreshEmailsButton_Click(object sender, RoutedEventArgs e)
@@ -170,13 +194,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void AssociatedTaskLink_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void EmailListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: EmailMessage email })
+        if (FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: EmailMessage email } item)
         {
             return;
         }
 
+        item.IsSelected = true;
         ViewModel.SelectedEmail = email;
         ViewModel.FilterTasksByEmail(email);
         e.Handled = true;
@@ -267,6 +292,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void HeaderFilterTextBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TextBox textBox && !textBox.IsKeyboardFocusWithin)
+        {
+            e.Handled = true;
+            textBox.Focus();
+        }
+    }
+
     private void CopyTasksAsText()
     {
         SetClipboardText(CreateTasksText(GetVisibleTasks()));
@@ -311,6 +345,7 @@ public partial class MainWindow : Window
         window.Closed += (_, _) =>
         {
             openTaskDetailWindows.Remove(window);
+            ViewModel.FlushPendingTaskSaves();
             ViewModel.TasksView.Refresh();
         };
 

@@ -4,6 +4,7 @@ namespace TwoDoThree.Models;
 
 public sealed class ResourceItem : ObservableObject
 {
+    private Guid id = Guid.NewGuid();
     private string name = string.Empty;
     private ResourceKind kind;
     private string content = string.Empty;
@@ -13,6 +14,12 @@ public sealed class ResourceItem : ObservableObject
     private string emailFrom = string.Empty;
     private string emailSubject = string.Empty;
     private DateTime? emailReceivedOn;
+
+    public Guid Id
+    {
+        get => id;
+        set => SetProperty(ref id, value == Guid.Empty ? Guid.NewGuid() : value);
+    }
 
     public string Name
     {

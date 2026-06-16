@@ -94,16 +94,6 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,12" LastChildFill="False">
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                <Label Content="Search:"
-                       Target="{Binding ElementName=SearchBox}"
-                       VerticalAlignment="Center"
-                       Padding="0,0,8,0" />
-                <TextBox x:Name="SearchBox"
-                         Width="360"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-            </StackPanel>
-
             <Button DockPanel.Dock="Right"
                     Width="36"
                     Height="32"
@@ -123,8 +113,17 @@
                   Margin="0,0,0,12">
             <Expander.Header>
                 <DockPanel LastChildFill="False">
-                    <TextBlock Text="Email"
+                    <TextBlock Text="Emails"
                                VerticalAlignment="Center" />
+                    <TextBox Width="260"
+                             Height="24"
+                             MinHeight="24"
+                             Margin="10,0,0,0"
+                             Padding="6,2"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Filter emails"
+                             PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
+                             Text="{Binding EmailSearchText, UpdateSourceTrigger=PropertyChanged}" />
                     <StackPanel DockPanel.Dock="Right"
                                 Orientation="Horizontal"
                                 Margin="20,0,0,0">
@@ -180,6 +179,7 @@
                              PreviewDragOver="EmailListBox_PreviewDragOver"
                              Drop="EmailListBox_Drop"
                              PreviewMouseMove="EmailListBox_PreviewMouseMove"
+                             MouseDoubleClick="EmailListBox_MouseDoubleClick"
                              PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown">
                         <ListBox.ContextMenu>
                             <ContextMenu>
@@ -200,10 +200,8 @@
                                                FontSize="11"
                                                FontStyle="Italic"
                                                Foreground="#2563EB"
-                                               Cursor="Hand"
                                                TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding AssociatedTaskSummary}"
-                                               MouseLeftButtonDown="AssociatedTaskLink_MouseLeftButtonDown">
+                                               ToolTip="{Binding AssociatedTaskSummary}">
                                         <TextBlock.Style>
                                             <Style TargetType="{x:Type TextBlock}">
                                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -270,8 +268,72 @@
         </Expander>
 
         <Expander Grid.Row="2"
-                  Header="Tasks"
                   IsExpanded="{Binding IsTaskSectionExpanded}">
+            <Expander.Header>
+                <DockPanel LastChildFill="False">
+                    <TextBlock Text="Tasks"
+                               VerticalAlignment="Center" />
+                    <TextBox Width="260"
+                             Height="24"
+                             MinHeight="24"
+                             Margin="10,0,0,0"
+                             Padding="6,2"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Filter tasks"
+                             PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
+                             Text="{Binding TaskSearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                Margin="20,0,0,0">
+                        <TextBlock Text="{Binding TaskPersistenceStatus}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="320" />
+                        <TextBlock Text="{Binding TaskEmailFilterSummary}"
+                                   Foreground="#2563EB"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="420"
+                                   Margin="12,0,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasTaskEmailFilter}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Button Width="24"
+                                Height="24"
+                                MinHeight="24"
+                                Margin="8,0,0,0"
+                                Padding="0"
+                                ToolTip="Clear email filter"
+                                Click="ClearTaskEmailFilterButton_Click">
+                            <Button.Style>
+                                <Style TargetType="{x:Type Button}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasTaskEmailFilter}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="&#xE711;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="10" />
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Expander.Header>
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource MutedBorderBrush}"
                     BorderThickness="1"
@@ -300,37 +362,6 @@
                                 <TextBlock Text="&#xE710;"
                                            FontFamily="Segoe MDL2 Assets"
                                            FontSize="16" />
-                            </Button>
-                        </StackPanel>
-                        <StackPanel DockPanel.Dock="Left"
-                                    Orientation="Horizontal"
-                                    VerticalAlignment="Center">
-                            <StackPanel.Style>
-                                <Style TargetType="{x:Type StackPanel}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasTaskEmailFilter}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </StackPanel.Style>
-                            <TextBlock Text="{Binding TaskEmailFilterSummary}"
-                                       Foreground="#2563EB"
-                                       FontSize="12"
-                                       FontStyle="Italic"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxWidth="420" />
-                            <Button Width="24"
-                                    Height="24"
-                                    Margin="8,0,0,0"
-                                    Padding="0"
-                                    ToolTip="Clear email filter"
-                                    Click="ClearTaskEmailFilterButton_Click">
-                                <TextBlock Text="&#xE711;"
-                                           FontFamily="Segoe MDL2 Assets"
-                                           FontSize="10" />
                             </Button>
                         </StackPanel>
                     </DockPanel>

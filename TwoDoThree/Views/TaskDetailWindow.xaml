@@ -346,6 +346,22 @@
                                                   CanContentScroll="False"
                                                   Focusable="False">
                                         <StackPanel Orientation="Vertical">
+                                            <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                    ToolTip="Expand Resource"
+                                                    Click="PopOutResourceButton_Click">
+                                                <TextBlock Text="&#xE740;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="14" />
+                                            </Button>
+                                            <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                    Margin="0,6,0,0"
+                                                    ToolTip="Save Resource"
+                                                    Command="{Binding SaveSelectedResourceCommand}">
+                                                <TextBlock Text="&#xE74E;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="14" />
+                                            </Button>
+                                            <Separator Margin="0,6,0,6" />
                                             <StackPanel Orientation="Vertical">
                                                 <StackPanel.Style>
                                                     <Style TargetType="{x:Type StackPanel}">
@@ -405,26 +421,10 @@
                                                         Click="StrikethroughButton_Click">
                                                     <TextBlock Text="S"
                                                                FontFamily="Segoe UI"
-                                                               TextDecorations="Strikethrough"
+                                                       TextDecorations="Strikethrough"
                                                                FontSize="12" />
                                                 </Button>
                                             </StackPanel>
-                                            <Separator Margin="0,6,0,6" />
-                                            <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                    ToolTip="Open Resource in New Window"
-                                                    Click="PopOutResourceButton_Click">
-                                                <TextBlock Text="&#xE740;"
-                                                           FontFamily="Segoe MDL2 Assets"
-                                                           FontSize="14" />
-                                            </Button>
-                                            <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                    Margin="0,6,0,0"
-                                                    ToolTip="Save Resource"
-                                                    Command="{Binding SaveSelectedResourceCommand}">
-                                                <TextBlock Text="&#xE74E;"
-                                                           FontFamily="Segoe MDL2 Assets"
-                                                           FontSize="14" />
-                                            </Button>
                                         </StackPanel>
                                     </ScrollViewer>
 

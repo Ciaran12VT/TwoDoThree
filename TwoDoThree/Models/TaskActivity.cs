@@ -2,6 +2,8 @@ namespace TwoDoThree.Models;
 
 public sealed class TaskActivity
 {
+    public Guid Id { get; init; } = Guid.NewGuid();
+
     public DateTime OccurredOn { get; init; } = DateTime.Now;
 
     public string Activity { get; init; } = string.Empty;

@@ -110,6 +110,14 @@ public sealed class TaskItem : ObservableObject
         }
     }
 
+    public void InitializeStatus(TaskStatus currentStatus, TaskStatus previousStatus)
+    {
+        status = currentStatus;
+        statusBeforeActive = previousStatus;
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(StatusBeforeActive));
+    }
+
     public void AddActivity(string activity)
     {
         Activities.Add(new TaskActivity

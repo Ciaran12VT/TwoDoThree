@@ -15,13 +15,18 @@ public sealed class MainViewModel : ObservableObject
     private readonly IEmailProvider emailProvider;
     private readonly IEmailImportService emailImportService;
     private readonly IEmailCacheStore emailCacheStore;
+    private readonly ITaskStore taskStore;
+    private readonly HashSet<TaskItem> pendingTaskSaves = new();
     private readonly DispatcherTimer activeTaskTimer;
     private readonly DispatcherTimer emailSyncTimer;
+    private readonly DispatcherTimer taskPersistenceTimer;
     private bool isEnforcingActiveTask;
     private bool isEmailSyncing;
-    private int nextTaskId = 1004;
+    private int nextTaskId = 1001;
     private string emailSyncStatus = string.Empty;
-    private string searchText = string.Empty;
+    private string taskPersistenceStatus = string.Empty;
+    private string emailSearchText = string.Empty;
+    private string taskSearchText = string.Empty;
     private EmailMessage? taskEmailFilter;
     private EmailMessage? selectedEmail;
     private TaskItem? selectedTask;
@@ -32,19 +37,27 @@ public sealed class MainViewModel : ObservableObject
         AppSettings settings,
         IEmailProvider emailProvider,
         IEmailImportService emailImportService,
-        IEmailCacheStore emailCacheStore)
+        IEmailCacheStore emailCacheStore,
+        ITaskStore taskStore)
     {
         Settings = settings;
         this.emailProvider = emailProvider;
         this.emailImportService = emailImportService;
         this.emailCacheStore = emailCacheStore;
+        this.taskStore = taskStore;
         EmailsView = CollectionViewSource.GetDefaultView(Emails);
         TasksView = CollectionViewSource.GetDefaultView(Tasks);
         EmailsView.Filter = FilterEmail;
         TasksView.Filter = FilterTask;
 
+        taskPersistenceTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(800)
+        };
+        taskPersistenceTimer.Tick += (_, _) => SavePendingTasks();
+
         LoadCachedEmails();
-        SeedTasks();
+        LoadTasksFromStore();
         RefreshEmailTaskAssociations();
         RecalculateAllTaskTimeSpent();
 
@@ -71,14 +84,25 @@ public sealed class MainViewModel : ObservableObject
 
     public ICollectionView TasksView { get; }
 
-    public string SearchText
+    public string EmailSearchText
     {
-        get => searchText;
+        get => emailSearchText;
         set
         {
-            if (SetProperty(ref searchText, value))
+            if (SetProperty(ref emailSearchText, value))
             {
                 EmailsView.Refresh();
+            }
+        }
+    }
+
+    public string TaskSearchText
+    {
+        get => taskSearchText;
+        set
+        {
+            if (SetProperty(ref taskSearchText, value))
+            {
                 TasksView.Refresh();
             }
         }
@@ -118,6 +142,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get => emailSyncStatus;
         set => SetProperty(ref emailSyncStatus, value);
+    }
+
+    public string TaskPersistenceStatus
+    {
+        get => taskPersistenceStatus;
+        set => SetProperty(ref taskPersistenceStatus, value);
     }
 
     public bool IsEmailSyncing
@@ -194,6 +224,51 @@ public sealed class MainViewModel : ObservableObject
         SetTaskStatus(task, TaskItemStatus.Active);
     }
 
+    public void ReloadTasksFromStore()
+    {
+        FlushPendingTaskSaves();
+        LoadTasksFromStore();
+        RefreshEmailTaskAssociations();
+        TasksView.Refresh();
+    }
+
+    public void FlushPendingTaskSaves()
+    {
+        foreach (var task in Tasks.Where(task => task.Status == TaskItemStatus.Active))
+        {
+            pendingTaskSaves.Add(task);
+        }
+
+        taskPersistenceTimer.Stop();
+        SavePendingTasks();
+    }
+
+    public bool SaveAllTasksToStore()
+    {
+        if (!taskStore.IsConfigured)
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (var task in Tasks)
+            {
+                UpdateTaskTimeSpent(task);
+                taskStore.SaveTask(task);
+            }
+
+            pendingTaskSaves.Clear();
+            TaskPersistenceStatus = $"Saved {Tasks.Count} task{(Tasks.Count == 1 ? string.Empty : "s")} to SQL Server.";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            TaskPersistenceStatus = $"SQL Server save failed: {ex.Message}";
+            return false;
+        }
+    }
+
     public async Task InitializeEmailAsync(Window owner)
     {
         await RefreshEmailsAsync(owner, allowInteractiveSignIn: false);
@@ -233,6 +308,40 @@ public sealed class MainViewModel : ObservableObject
         EmailSyncStatus = messages.Count > 0 ? $"Loaded {messages.Count} cached emails." : GetEmptyEmailStatus();
     }
 
+    private void LoadTasksFromStore()
+    {
+        pendingTaskSaves.Clear();
+        taskPersistenceTimer.Stop();
+        Tasks.Clear();
+        SelectedTask = null;
+
+        if (!taskStore.IsConfigured)
+        {
+            nextTaskId = 1001;
+            TaskPersistenceStatus = "SQL Server storage is not configured.";
+            return;
+        }
+
+        try
+        {
+            var tasks = taskStore.LoadTasks();
+            foreach (var task in tasks)
+            {
+                RegisterTask(task);
+                Tasks.Add(task);
+            }
+
+            nextTaskId = Tasks.Count == 0 ? 1001 : Tasks.Max(task => task.Id) + 1;
+            SelectedTask = Tasks.FirstOrDefault();
+            TaskPersistenceStatus = $"Loaded {Tasks.Count} task{(Tasks.Count == 1 ? string.Empty : "s")} from SQL Server.";
+        }
+        catch (Exception ex)
+        {
+            nextTaskId = 1001;
+            TaskPersistenceStatus = $"SQL Server storage unavailable: {ex.Message}";
+        }
+    }
+
     public async Task ImportEmailFilesAsync(IEnumerable<string> filePaths)
     {
         var importedMessages = await emailImportService.ImportAsync(filePaths, CancellationToken.None);
@@ -250,6 +359,50 @@ public sealed class MainViewModel : ObservableObject
     public void UpdateEmailSyncInterval()
     {
         emailSyncTimer.Interval = TimeSpan.FromMinutes(Settings.Email.SyncIntervalMinutes);
+    }
+
+    private void QueueTaskSave(TaskItem task)
+    {
+        if (!taskStore.IsConfigured)
+        {
+            return;
+        }
+
+        pendingTaskSaves.Add(task);
+        taskPersistenceTimer.Stop();
+        taskPersistenceTimer.Start();
+    }
+
+    private void SavePendingTasks()
+    {
+        taskPersistenceTimer.Stop();
+        if (pendingTaskSaves.Count == 0 || !taskStore.IsConfigured)
+        {
+            pendingTaskSaves.Clear();
+            return;
+        }
+
+        var tasksToSave = pendingTaskSaves.ToList();
+        pendingTaskSaves.Clear();
+
+        try
+        {
+            foreach (var task in tasksToSave)
+            {
+                taskStore.SaveTask(task);
+            }
+
+            TaskPersistenceStatus = $"Saved {tasksToSave.Count} task{(tasksToSave.Count == 1 ? string.Empty : "s")} to SQL Server.";
+        }
+        catch (Exception ex)
+        {
+            foreach (var task in tasksToSave)
+            {
+                pendingTaskSaves.Add(task);
+            }
+
+            TaskPersistenceStatus = $"SQL Server save failed: {ex.Message}";
+        }
     }
 
     private void ReplaceEmails(IEnumerable<EmailMessage> messages)
@@ -342,12 +495,12 @@ public sealed class MainViewModel : ObservableObject
 
     private void AddTask(TaskItem task)
     {
-        task.PropertyChanged += Task_PropertyChanged;
-        task.Resources.CollectionChanged += TaskResources_CollectionChanged;
+        RegisterTask(task);
         task.AddActivity("Task created with status Inactive.");
         UpdateTaskTimeSpent(task);
         Tasks.Add(task);
         RefreshEmailTaskAssociations();
+        QueueTaskSave(task);
     }
 
     private static void AddDefaultNotesResource(TaskItem task)
@@ -358,6 +511,24 @@ public sealed class MainViewModel : ObservableObject
             Kind = ResourceKind.Text,
             Content = string.Empty
         });
+    }
+
+    private void RegisterTask(TaskItem task)
+    {
+        task.PropertyChanged += Task_PropertyChanged;
+        task.Resources.CollectionChanged += TaskResources_CollectionChanged;
+        task.Actions.CollectionChanged += TaskActions_CollectionChanged;
+        task.Activities.CollectionChanged += TaskActivities_CollectionChanged;
+
+        foreach (var resource in task.Resources)
+        {
+            resource.PropertyChanged += Resource_PropertyChanged;
+        }
+
+        foreach (var action in task.Actions)
+        {
+            action.PropertyChanged += Action_PropertyChanged;
+        }
     }
 
     private void SetTaskEmailFilter(EmailMessage? email)
@@ -403,7 +574,7 @@ public sealed class MainViewModel : ObservableObject
 
     private bool FilterEmail(object item)
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
+        if (string.IsNullOrWhiteSpace(EmailSearchText))
         {
             return true;
         }
@@ -413,10 +584,10 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        return Contains(email.From, SearchText)
-               || Contains(email.Subject, SearchText)
-               || Contains(email.Preview, SearchText)
-               || Contains(email.Body, SearchText);
+        return Contains(email.From, EmailSearchText)
+               || Contains(email.Subject, EmailSearchText)
+               || Contains(email.Preview, EmailSearchText)
+               || Contains(email.Body, EmailSearchText);
     }
 
     private bool FilterTask(object item)
@@ -431,44 +602,20 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(SearchText))
+        if (string.IsNullOrWhiteSpace(TaskSearchText))
         {
             return true;
         }
 
-        return task.Id.ToString().Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-               || Contains(task.Title, SearchText)
-               || Contains(task.Tags, SearchText)
-               || Contains(task.Status.ToString(), SearchText);
+        return task.Id.ToString().Contains(TaskSearchText, StringComparison.OrdinalIgnoreCase)
+               || Contains(task.Title, TaskSearchText)
+               || Contains(task.Tags, TaskSearchText)
+               || Contains(task.Status.ToString(), TaskSearchText);
     }
 
     private static bool Contains(string value, string query)
     {
         return value.Contains(query, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void SeedTasks()
-    {
-        var task = CreateTask("Prepare onboarding task flow", "onboarding, process");
-        task.Resources.Add(new ResourceItem
-        {
-            Name = "Initial notes",
-            Kind = ResourceKind.Text,
-            Content = "Capture the workflow, split it into actions, and attach source material as resources."
-        });
-        task.Resources.Add(new ResourceItem
-        {
-            Name = "Status helper",
-            Kind = ResourceKind.CodeSnippet,
-            Content = "status switch { NotStarted => white, InProgress => blue, Completed => green, Failed => red, Cancelled => grey }"
-        });
-        task.Actions.Add(new ActionItem { ActionText = "Draft task structure" });
-        task.Actions.Add(new ActionItem { ActionText = "Add resource viewer", IndentLevel = 1, Status = ActionStatus.InProgress });
-        task.Actions.Add(new ActionItem { ActionText = "Verify action numbering", Status = ActionStatus.NotStarted });
-        TaskDetailViewModel.RenumberActions(task.Actions);
-        AddTask(task);
-        SetTaskStatus(task, TaskItemStatus.InProgress);
-        SelectedTask = task;
     }
 
     private void Task_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -482,27 +629,112 @@ public sealed class MainViewModel : ObservableObject
         {
             RefreshEmailTaskAssociations();
             TasksView.Refresh();
-            return;
         }
 
-        if (e.PropertyName != nameof(TaskItem.Status))
+        if (e.PropertyName == nameof(TaskItem.Status))
         {
-            return;
+            if (!isEnforcingActiveTask && task.Status == TaskItemStatus.Active)
+            {
+                EnforceSingleActiveTask(task);
+            }
+
+            UpdateTaskTimeSpent(task);
+            TasksView.Refresh();
         }
 
-        if (!isEnforcingActiveTask && task.Status == TaskItemStatus.Active)
+        if (e.PropertyName != nameof(TaskItem.TimeSpent))
         {
-            EnforceSingleActiveTask(task);
+            QueueTaskSave(task);
         }
-
-        UpdateTaskTimeSpent(task);
-        TasksView.Refresh();
     }
 
     private void TaskResources_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (FindTaskForResourceCollection(sender) is { } task)
+        {
+            if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Replace
+                && e.NewItems is not null)
+            {
+                foreach (ResourceItem resource in e.NewItems)
+                {
+                    resource.PropertyChanged += Resource_PropertyChanged;
+                }
+            }
+
+            task.UpdatedOn = DateTime.Now;
+            QueueTaskSave(task);
+        }
+
         RefreshEmailTaskAssociations();
         TasksView.Refresh();
+    }
+
+    private void TaskActions_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (FindTaskForActionCollection(sender) is not { } task)
+        {
+            return;
+        }
+
+        if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Replace
+            && e.NewItems is not null)
+        {
+            foreach (ActionItem action in e.NewItems)
+            {
+                action.PropertyChanged += Action_PropertyChanged;
+            }
+        }
+
+        task.UpdatedOn = DateTime.Now;
+        QueueTaskSave(task);
+    }
+
+    private void TaskActivities_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (FindTaskForActivityCollection(sender) is { } task)
+        {
+            QueueTaskSave(task);
+        }
+    }
+
+    private void Resource_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ResourceItem resource
+            || Tasks.FirstOrDefault(task => task.Resources.Contains(resource)) is not { } task)
+        {
+            return;
+        }
+
+        task.UpdatedOn = DateTime.Now;
+        RefreshEmailTaskAssociations();
+        QueueTaskSave(task);
+    }
+
+    private void Action_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ActionItem action
+            || Tasks.FirstOrDefault(task => task.Actions.Contains(action)) is not { } task)
+        {
+            return;
+        }
+
+        task.UpdatedOn = DateTime.Now;
+        QueueTaskSave(task);
+    }
+
+    private TaskItem? FindTaskForResourceCollection(object? sender)
+    {
+        return Tasks.FirstOrDefault(task => ReferenceEquals(task.Resources, sender));
+    }
+
+    private TaskItem? FindTaskForActionCollection(object? sender)
+    {
+        return Tasks.FirstOrDefault(task => ReferenceEquals(task.Actions, sender));
+    }
+
+    private TaskItem? FindTaskForActivityCollection(object? sender)
+    {
+        return Tasks.FirstOrDefault(task => ReferenceEquals(task.Activities, sender));
     }
 
     private void RefreshEmailTaskAssociations()

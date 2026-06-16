@@ -8,6 +8,7 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly AppSettings settings;
     private string selectedSection = "Email";
     private string connectionStatus = string.Empty;
+    private string storageStatus = string.Empty;
 
     public SettingsViewModel(AppSettings settings)
     {
@@ -24,8 +25,15 @@ public sealed class SettingsViewModel : ObservableObject
             MaxInboxMessages = settings.Email.MaxInboxMessages
         };
         TagManager = new TagManagerViewModel(settings.Tags.Tags);
-        Sections = new ObservableCollection<string> { "Email", "Tags" };
+        Database = new DatabaseSettings
+        {
+            ConnectionString = settings.Database.ConnectionString
+        };
+        Sections = new ObservableCollection<string> { "Email", "Tags", "Storage" };
         ConnectionStatus = GetDefaultConnectionStatus();
+        StorageStatus = Database.IsConfigured
+            ? "SQL Server connection string configured."
+            : "Enter a SQL Server connection string to enable task persistence.";
         Email.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(EmailSettings.Source))
@@ -38,6 +46,8 @@ public sealed class SettingsViewModel : ObservableObject
     public EmailSettings Email { get; }
 
     public TagManagerViewModel TagManager { get; }
+
+    public DatabaseSettings Database { get; }
 
     public IReadOnlyList<EmailSource> EmailSourceValues { get; } = Enum.GetValues<EmailSource>();
 
@@ -55,6 +65,12 @@ public sealed class SettingsViewModel : ObservableObject
         set => SetProperty(ref connectionStatus, value);
     }
 
+    public string StorageStatus
+    {
+        get => storageStatus;
+        set => SetProperty(ref storageStatus, value);
+    }
+
     public void Apply()
     {
         settings.Email.AccountAddress = Email.AccountAddress;
@@ -65,6 +81,7 @@ public sealed class SettingsViewModel : ObservableObject
         settings.Email.SyncIntervalMinutes = Email.SyncIntervalMinutes;
         settings.Email.UseWindowsAuthentication = Email.UseWindowsAuthentication;
         settings.Email.MaxInboxMessages = Email.MaxInboxMessages;
+        settings.Database.ConnectionString = Database.ConnectionString;
         TagManager.ApplyTo(settings.Tags);
     }
 

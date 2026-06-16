@@ -31,6 +31,7 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
 
             ApplyEmail(settings.Email, snapshot.Email);
             settings.Tags.ReplaceTags(snapshot.Tags);
+            settings.Database.ConnectionString = snapshot.Database.ConnectionString;
         }
         catch (JsonException)
         {
@@ -50,7 +51,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         var snapshot = new AppSettingsSnapshot
         {
             Email = EmailSettingsSnapshot.From(settings.Email),
-            Tags = settings.Tags.Tags.ToList()
+            Tags = settings.Tags.Tags.ToList(),
+            Database = DatabaseSettingsSnapshot.From(settings.Database)
         };
 
         File.WriteAllText(
@@ -75,5 +77,20 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         public EmailSettingsSnapshot Email { get; set; } = new();
 
         public List<string> Tags { get; set; } = [];
+
+        public DatabaseSettingsSnapshot Database { get; set; } = new();
+    }
+
+    private sealed class DatabaseSettingsSnapshot
+    {
+        public string ConnectionString { get; set; } = string.Empty;
+
+        public static DatabaseSettingsSnapshot From(DatabaseSettings settings)
+        {
+            return new DatabaseSettingsSnapshot
+            {
+                ConnectionString = settings.ConnectionString
+            };
+        }
     }
 }

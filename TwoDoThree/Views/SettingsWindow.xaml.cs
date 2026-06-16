@@ -133,6 +133,25 @@ public partial class SettingsWindow : Window
         viewModel.ConnectionStatus = "Cleared cached emails.";
     }
 
+    private async void TestDatabaseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.StorageStatus = "Testing SQL Server connection...";
+        try
+        {
+            viewModel.StorageStatus = await Task.Run(() =>
+                SqlServerTaskStore.TestConnection(viewModel.Database.ConnectionString));
+        }
+        catch (Exception ex)
+        {
+            viewModel.StorageStatus = $"SQL Server connection failed: {ex.Message}";
+        }
+    }
+
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel viewModel)
