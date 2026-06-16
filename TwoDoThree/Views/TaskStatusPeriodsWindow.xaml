@@ -4,9 +4,9 @@
         Title="Status Periods"
         Icon="../Assets/AppIcon.ico"
         Height="420"
-        Width="760"
+        Width="920"
         MinHeight="320"
-        MinWidth="620"
+        MinWidth="760"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -32,6 +32,9 @@
                 <DataGridTextColumn Header="Status"
                                     Width="140"
                                     Binding="{Binding StatusDisplay}" />
+                <DataGridTextColumn Header="Status Message"
+                                    Width="*"
+                                    Binding="{Binding StatusMessage}" />
                 <DataGridTextColumn Header="Start Time"
                                     Width="170"
                                     Binding="{Binding StartTime, StringFormat={}{0:g}}" />

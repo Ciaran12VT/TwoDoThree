@@ -4,12 +4,26 @@ namespace TwoDoThree.Models;
 
 public sealed class EmailSettings : ObservableObject
 {
-    private string accountAddress = "demo.outlook@example.com";
-    private string displayName = "Outlook Demo";
+    private EmailSource source = EmailSource.MicrosoftGraph;
+    private string accountAddress = string.Empty;
+    private string displayName = string.Empty;
     private string tenantId = string.Empty;
     private string clientId = string.Empty;
     private bool useWindowsAuthentication = true;
     private int syncIntervalMinutes = 15;
+    private int maxInboxMessages = 100;
+
+    public EmailSource Source
+    {
+        get => source;
+        set
+        {
+            if (SetProperty(ref source, value))
+            {
+                OnPropertyChanged(nameof(IsConfigured));
+            }
+        }
+    }
 
     public string AccountAddress
     {
@@ -38,7 +52,13 @@ public sealed class EmailSettings : ObservableObject
     public string ClientId
     {
         get => clientId;
-        set => SetProperty(ref clientId, value);
+        set
+        {
+            if (SetProperty(ref clientId, value))
+            {
+                OnPropertyChanged(nameof(IsConfigured));
+            }
+        }
     }
 
     public bool UseWindowsAuthentication
@@ -53,5 +73,11 @@ public sealed class EmailSettings : ObservableObject
         set => SetProperty(ref syncIntervalMinutes, Math.Max(1, value));
     }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(AccountAddress);
+    public int MaxInboxMessages
+    {
+        get => maxInboxMessages;
+        set => SetProperty(ref maxInboxMessages, Math.Clamp(value, 1, 250));
+    }
+
+    public bool IsConfigured => Source != EmailSource.MicrosoftGraph || !string.IsNullOrWhiteSpace(ClientId);
 }

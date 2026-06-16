@@ -13,10 +13,11 @@ public sealed class TaskStatusToBackgroundConverter : IValueConverter
         {
             TaskItemStatus.Active => new SolidColorBrush(Color.FromRgb(187, 247, 208)),
             TaskItemStatus.InProgress => new SolidColorBrush(Color.FromRgb(191, 219, 254)),
-            TaskItemStatus.OnHold => new SolidColorBrush(Color.FromRgb(254, 215, 170)),
-            TaskItemStatus.Blocked => new SolidColorBrush(Color.FromRgb(254, 202, 202)),
-            TaskItemStatus.Complete => new SolidColorBrush(Color.FromRgb(34, 197, 94)),
+            TaskItemStatus.OnHold => new SolidColorBrush(Color.FromRgb(251, 146, 60)),
+            TaskItemStatus.Blocked => new SolidColorBrush(Color.FromRgb(252, 165, 165)),
+            TaskItemStatus.Complete => new SolidColorBrush(Color.FromRgb(74, 222, 128)),
             TaskItemStatus.Cancelled => new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            TaskItemStatus.Inactive => new SolidColorBrush(Color.FromRgb(229, 231, 235)),
             _ => new SolidColorBrush(Color.FromRgb(229, 231, 235))
         };
     }

@@ -5,11 +5,14 @@ using System.Windows.Media;
 using TwoDoThree.Controls;
 using TwoDoThree.Models;
 using TwoDoThree.ViewModels;
+using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
 namespace TwoDoThree.Views;
 
 public partial class TaskDetailWindow : Window
 {
+    private const double ToolbarScrollAmount = 42;
+
     private static readonly string[] TextFontFamilies =
     [
         "Segoe UI",
@@ -25,21 +28,28 @@ public partial class TaskDetailWindow : Window
     private static readonly double[] TextFontSizes = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
 
     private bool isResourceTreeVisible = true;
+    private bool isUpdatingTaskStatusSelection;
     private GridLength expandedResourcePaneWidth = new(292);
     private GridLength expandedResourceSectionHeight = new(3, GridUnitType.Star);
 
-    public TaskDetailWindow(TaskItem task)
+    public TaskDetailWindow(TaskItem task, TagSettings tagSettings)
     {
         InitializeComponent();
-        DataContext = new TaskDetailViewModel(task);
+        DataContext = new TaskDetailViewModel(task, tagSettings);
     }
 
-    private void ResourceTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    private void ResourceTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (e.NewValue is ResourceItem resource && DataContext is TaskDetailViewModel viewModel)
+        if (FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject) is not { DataContext: ResourceItem resource } item
+            || DataContext is not TaskDetailViewModel viewModel)
         {
-            viewModel.SelectedResource = resource;
+            return;
         }
+
+        item.IsSelected = true;
+        item.Focus();
+        viewModel.SelectedResource = resource;
+        e.Handled = true;
     }
 
     private void ResourceTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -91,6 +101,57 @@ public partial class TaskDetailWindow : Window
                 viewModel.RefreshResourceGroups(resource);
             }
         }
+    }
+
+    private void TagsEditor_ManageTagsRequested(object? sender, EventArgs e)
+    {
+        if (DataContext is not TaskDetailViewModel viewModel)
+        {
+            return;
+        }
+
+        var window = new TagManagerWindow(viewModel.TagSettings, TagsEditor.CurrentToken)
+        {
+            Owner = this
+        };
+
+        var requestedTag = TagsEditor.CurrentToken;
+        if (window.ShowDialog() == true
+            && !string.IsNullOrWhiteSpace(requestedTag)
+            && viewModel.AvailableTags.FirstOrDefault(tag =>
+                string.Equals(tag, requestedTag, StringComparison.OrdinalIgnoreCase)) is { } addedTag)
+        {
+            TagsEditor.ApplyTag(addedTag);
+        }
+    }
+
+    private void TaskStatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isUpdatingTaskStatusSelection
+            || DataContext is not TaskDetailViewModel viewModel
+            || sender is not ComboBox comboBox
+            || comboBox.SelectedItem is not TaskItemStatus status
+            || status == viewModel.Task.Status)
+        {
+            return;
+        }
+
+        if (!StatusMessageWindow.TryPrompt(this, status, out var statusMessage))
+        {
+            isUpdatingTaskStatusSelection = true;
+            try
+            {
+                comboBox.SelectedItem = viewModel.Task.Status;
+            }
+            finally
+            {
+                isUpdatingTaskStatusSelection = false;
+            }
+
+            return;
+        }
+
+        viewModel.SetTaskStatus(status, statusMessage);
     }
 
     private void FontFamilyButton_Click(object sender, RoutedEventArgs e)
@@ -181,6 +242,31 @@ public partial class TaskDetailWindow : Window
         }
 
         action(editor);
+    }
+
+    private void InternalToolbarScrollUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        ScrollToolbar(InternalResourceToolbarScrollViewer, -ToolbarScrollAmount);
+    }
+
+    private void InternalToolbarScrollDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        ScrollToolbar(InternalResourceToolbarScrollViewer, ToolbarScrollAmount);
+    }
+
+    private void ResourceAddToolbarScrollUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        ScrollToolbar(ResourceAddToolbarScrollViewer, -ToolbarScrollAmount);
+    }
+
+    private void ResourceAddToolbarScrollDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        ScrollToolbar(ResourceAddToolbarScrollViewer, ToolbarScrollAmount);
+    }
+
+    private static void ScrollToolbar(ScrollViewer scrollViewer, double delta)
+    {
+        scrollViewer.ScrollToVerticalOffset(Math.Max(0, scrollViewer.VerticalOffset + delta));
     }
 
     private void ToggleResourceTreeButton_Click(object sender, RoutedEventArgs e)

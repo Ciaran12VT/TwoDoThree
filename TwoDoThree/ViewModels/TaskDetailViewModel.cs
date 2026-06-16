@@ -14,9 +14,10 @@ public sealed class TaskDetailViewModel : ObservableObject
     private ActionItem? selectedAction;
     private string resourceSearchText = string.Empty;
 
-    public TaskDetailViewModel(TaskItem task)
+    public TaskDetailViewModel(TaskItem task, TagSettings tagSettings)
     {
         Task = task;
+        TagSettings = tagSettings;
         AddTextResourceCommand = new RelayCommand(_ => AddTextResource());
         AddSheetResourceCommand = new RelayCommand(_ => AddSheetResource());
         AddCodeResourceCommand = new RelayCommand(_ => AddCodeResource());
@@ -31,6 +32,10 @@ public sealed class TaskDetailViewModel : ObservableObject
     }
 
     public TaskItem Task { get; }
+
+    public TagSettings TagSettings { get; }
+
+    public ObservableCollection<string> AvailableTags => TagSettings.Tags;
 
     public IReadOnlyList<TwoDoThree.Models.TaskStatus> TaskStatusValues { get; } = Enum.GetValues<TwoDoThree.Models.TaskStatus>();
 
@@ -94,6 +99,11 @@ public sealed class TaskDetailViewModel : ObservableObject
         SelectedResource = resourceToSelect is not null && Task.Resources.Contains(resourceToSelect)
             ? resourceToSelect
             : Task.Resources.FirstOrDefault();
+    }
+
+    public void SetTaskStatus(TwoDoThree.Models.TaskStatus status, string statusMessage = "")
+    {
+        Task.SetStatus(status, statusMessage);
     }
 
     public static void RenumberActions(IEnumerable<ActionItem> actions)

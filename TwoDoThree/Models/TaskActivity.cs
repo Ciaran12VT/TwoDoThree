@@ -9,4 +9,6 @@ public sealed class TaskActivity
     public TaskStatus? FromStatus { get; init; }
 
     public TaskStatus? ToStatus { get; init; }
+
+    public string StatusMessage { get; init; } = string.Empty;
 }

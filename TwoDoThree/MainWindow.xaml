@@ -50,6 +50,40 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="RoundOptionsButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="BorderBrush" Value="#1D4ED8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#3B82F6" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1D4ED8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -85,9 +119,47 @@
         </DockPanel>
 
         <Expander Grid.Row="1"
-                  Header="Email"
                   IsExpanded="{Binding IsEmailSectionExpanded}"
                   Margin="0,0,0,12">
+            <Expander.Header>
+                <DockPanel LastChildFill="False">
+                    <TextBlock Text="Email"
+                               VerticalAlignment="Center" />
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                Margin="20,0,0,0">
+                        <TextBlock Text="{Binding EmailSyncStatus}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="420" />
+                        <Button Width="28"
+                                Height="24"
+                                MinHeight="24"
+                                Padding="0"
+                                Margin="8,0,0,0"
+                                ToolTip="Import Email Files"
+                                Click="ImportEmailsButton_Click">
+                            <TextBlock Text="&#xE8E5;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </Button>
+                        <Button Width="28"
+                                Height="24"
+                                MinHeight="24"
+                                Padding="0"
+                                Margin="6,0,0,0"
+                                ToolTip="Refresh Outlook"
+                                IsEnabled="{Binding CanRefreshEmail}"
+                                Click="RefreshEmailsButton_Click">
+                            <TextBlock Text="&#xE72C;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Expander.Header>
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource MutedBorderBrush}"
                     BorderThickness="1"
@@ -104,10 +176,16 @@
                              ItemsSource="{Binding EmailsView}"
                              SelectedItem="{Binding SelectedEmail}"
                              BorderBrush="{StaticResource MutedBorderBrush}"
+                             AllowDrop="True"
+                             PreviewDragOver="EmailListBox_PreviewDragOver"
+                             Drop="EmailListBox_Drop"
                              PreviewMouseMove="EmailListBox_PreviewMouseMove"
                              PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown">
                         <ListBox.ContextMenu>
                             <ContextMenu>
+                                <MenuItem Header="Import email files"
+                                          Click="ImportEmailFilesMenuItem_Click" />
+                                <Separator />
                                 <MenuItem Header="Create task from email"
                                           Click="CreateTaskFromEmailMenuItem_Click" />
                             </ContextMenu>
@@ -205,14 +283,25 @@
                     </Grid.RowDefinitions>
 
                     <DockPanel Margin="0,0,0,8" LastChildFill="False">
-                        <Button DockPanel.Dock="Right"
-                                Style="{StaticResource RoundAddButtonStyle}"
-                                ToolTip="Add Task"
-                                Click="AddTaskButton_Click">
-                            <TextBlock Text="&#xE710;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="16" />
-                        </Button>
+                        <StackPanel DockPanel.Dock="Right"
+                                    Orientation="Horizontal">
+                            <Button x:Name="TasksListOptionsButton"
+                                    Style="{StaticResource RoundOptionsButtonStyle}"
+                                    ToolTip="Task List Options"
+                                    Margin="0,2,8,2"
+                                    Click="TasksListOptionsButton_Click">
+                                <TextBlock Text="&#xE700;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="13" />
+                            </Button>
+                            <Button Style="{StaticResource RoundAddButtonStyle}"
+                                    ToolTip="Add Task"
+                                    Click="AddTaskButton_Click">
+                                <TextBlock Text="&#xE710;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="16" />
+                            </Button>
+                        </StackPanel>
                         <StackPanel DockPanel.Dock="Left"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
@@ -257,7 +346,9 @@
                               PreviewDragOver="TasksGrid_PreviewDragOver"
                               Drop="TasksGrid_Drop"
                               PreviewMouseRightButtonDown="TasksGrid_PreviewMouseRightButtonDown"
-                              MouseDoubleClick="TasksGrid_MouseDoubleClick">
+                              MouseDoubleClick="TasksGrid_MouseDoubleClick"
+                              AlternatingRowBackground="{x:Null}"
+                              RowHeaderWidth="0">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Peek"
@@ -293,8 +384,44 @@
                                 <Setter Property="AllowDrop" Value="True" />
                                 <Setter Property="Background" Value="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}" />
                                 <Setter Property="Foreground" Value="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}" />
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="BorderBrush" Value="#1D4ED8" />
+                                        <Setter Property="BorderThickness" Value="1" />
+                                    </Trigger>
+                                </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
+                        <DataGrid.CellStyle>
+                            <Style TargetType="{x:Type DataGridCell}">
+                                <Setter Property="Background" Value="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}" />
+                                <Setter Property="Foreground" Value="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}" />
+                                <Setter Property="BorderBrush" Value="#F3F4F6" />
+                                <Setter Property="BorderThickness" Value="0,0,1,1" />
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="{x:Type DataGridCell}">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    SnapsToDevicePixels="True">
+                                                <ContentPresenter Margin="6,3"
+                                                                  VerticalAlignment="Center"
+                                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="BorderBrush" Value="#1D4ED8" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.CellStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="ID" Width="70" Binding="{Binding Id}" />
                             <DataGridTextColumn Header="Title" Width="2*" Binding="{Binding Title}" />

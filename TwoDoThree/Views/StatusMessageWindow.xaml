@@ -1,0 +1,48 @@
+<Window x:Class="TwoDoThree.Views.StatusMessageWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Status Message"
+        Icon="../Assets/AppIcon.ico"
+        Height="210"
+        Width="480"
+        MinHeight="210"
+        MinWidth="420"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{Binding Prompt}"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8" />
+
+        <TextBox x:Name="StatusMessageTextBox"
+                 Grid.Row="1"
+                 MaxLength="180"
+                 Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Grid.Row="2"
+                   Margin="0,8,0,0"
+                   Foreground="{StaticResource MutedTextBrush}"
+                   Text="Keep it short. This message will be stored with the status change." />
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="84"
+                    Content="Cancel"
+                    Click="CancelButton_Click" />
+            <Button Width="84"
+                    Margin="8,0,0,0"
+                    Content="Save"
+                    IsDefault="True"
+                    Click="SaveButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

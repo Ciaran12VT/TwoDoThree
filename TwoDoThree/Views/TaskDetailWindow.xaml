@@ -15,9 +15,9 @@
         <converters:StatusDisplayConverter x:Key="StatusDisplayConverter" />
 
         <Style x:Key="RoundIconButtonStyle" TargetType="{x:Type Button}">
-            <Setter Property="Width" Value="36" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinHeight" Value="30" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="BorderBrush" Value="#9CA3AF" />
@@ -33,7 +33,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="18">
+                                CornerRadius="15">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
@@ -52,6 +52,18 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarScrollButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="MinHeight" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#F9FAFB" />
+            <Setter Property="BorderBrush" Value="#D1D5DB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
 
         <DataTemplate x:Key="TextResourceTemplate" DataType="{x:Type models:ResourceItem}">
@@ -190,21 +202,26 @@
                            Text="Tags"
                            Margin="0,10,0,0"
                            VerticalAlignment="Center" />
-                <TextBox Grid.Row="1"
-                         Grid.Column="1"
-                         Grid.ColumnSpan="5"
-                         Margin="0,10,0,0"
-                         Text="{Binding Task.Tags, UpdateSourceTrigger=PropertyChanged}" />
+                <controls:TagEditorControl x:Name="TagsEditor"
+                                           Grid.Row="1"
+                                           Grid.Column="1"
+                                           Grid.ColumnSpan="5"
+                                           Margin="0,10,0,0"
+                                           Text="{Binding Task.Tags, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                           AvailableTags="{Binding AvailableTags}"
+                                           ManageTagsRequested="TagsEditor_ManageTagsRequested" />
 
                 <TextBlock Grid.Row="2"
                            Text="Status"
                            Margin="0,12,0,0"
                            VerticalAlignment="Center" />
-                <ComboBox Grid.Row="2"
+                <ComboBox x:Name="TaskStatusComboBox"
+                          Grid.Row="2"
                           Grid.Column="1"
                           Margin="0,12,20,0"
                           ItemsSource="{Binding TaskStatusValues}"
-                          SelectedItem="{Binding Task.Status}">
+                          SelectedItem="{Binding Task.Status, Mode=OneWay}"
+                          SelectionChanged="TaskStatusComboBox_SelectionChanged">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Converter={StaticResource StatusDisplayConverter}}" />
@@ -282,7 +299,7 @@
                         <ColumnDefinition Width="*" MinWidth="420" />
                         <ColumnDefinition x:Name="ResourceSplitterColumn" Width="Auto" />
                         <ColumnDefinition x:Name="ResourcePaneColumn" Width="292" MinWidth="32" />
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="36" />
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0"
@@ -301,93 +318,125 @@
                                                             Resource="{Binding SelectedResource}" />
 
                             <Border Grid.Column="1"
-                                    Margin="10,0,0,0"
-                                    Padding="8,0,0,0"
+                                    Margin="8,0,0,0"
+                                    Padding="4,0,0,0"
                                     BorderBrush="{StaticResource MutedBorderBrush}"
                                     BorderThickness="1,0,0,0">
-                                <StackPanel Orientation="Vertical"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Top">
-                                    <StackPanel Orientation="Vertical">
-                                        <StackPanel.Style>
-                                            <Style TargetType="{x:Type StackPanel}">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Text}">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </StackPanel.Style>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                ToolTip="Font Family"
-                                                Click="FontFamilyButton_Click">
-                                            <TextBlock Text="Aa"
-                                                       FontFamily="Segoe UI"
-                                                       FontSize="12" />
-                                        </Button>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                Margin="0,8,0,0"
-                                                ToolTip="Font Size"
-                                                Click="FontSizeButton_Click">
-                                            <TextBlock Text="A+"
-                                                       FontFamily="Segoe UI"
-                                                       FontSize="12" />
-                                        </Button>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                Margin="0,8,0,0"
-                                                ToolTip="Bold"
-                                                Click="BoldButton_Click">
-                                            <TextBlock Text="B"
-                                                       FontFamily="Segoe UI"
-                                                       FontWeight="Bold"
-                                                       FontSize="13" />
-                                        </Button>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                Margin="0,8,0,0"
-                                                ToolTip="Italic"
-                                                Click="ItalicButton_Click">
-                                            <TextBlock Text="I"
-                                                       FontFamily="Segoe UI"
-                                                       FontStyle="Italic"
-                                                       FontSize="13" />
-                                        </Button>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                Margin="0,8,0,0"
-                                                ToolTip="Underline"
-                                                Click="UnderlineButton_Click">
-                                            <TextBlock Text="U"
-                                                       FontFamily="Segoe UI"
-                                                       TextDecorations="Underline"
-                                                       FontSize="13" />
-                                        </Button>
-                                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                                Margin="0,8,0,0"
-                                                ToolTip="Strikethrough"
-                                                Click="StrikethroughButton_Click">
-                                            <TextBlock Text="S"
-                                                       FontFamily="Segoe UI"
-                                                       TextDecorations="Strikethrough"
-                                                       FontSize="13" />
-                                        </Button>
-                                    </StackPanel>
-                                    <Separator Margin="0,8,0,8" />
-                                    <Button Style="{StaticResource RoundIconButtonStyle}"
-                                            ToolTip="Open Resource in New Window"
-                                            Click="PopOutResourceButton_Click">
-                                        <TextBlock Text="&#xE740;"
+                                <Grid Width="30">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Button Grid.Row="0"
+                                            Style="{StaticResource ToolbarScrollButtonStyle}"
+                                            ToolTip="Scroll toolbar up"
+                                            Click="InternalToolbarScrollUpButton_Click">
+                                        <TextBlock Text="&#xE70E;"
                                                    FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="15" />
+                                                   FontSize="10" />
                                     </Button>
-                                    <Button Style="{StaticResource RoundIconButtonStyle}"
-                                            Margin="0,8,0,0"
-                                            ToolTip="Save Resource"
-                                            Command="{Binding SaveSelectedResourceCommand}">
-                                        <TextBlock Text="&#xE74E;"
+
+                                    <ScrollViewer x:Name="InternalResourceToolbarScrollViewer"
+                                                  Grid.Row="1"
+                                                  Margin="0,4"
+                                                  VerticalScrollBarVisibility="Hidden"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  CanContentScroll="False"
+                                                  Focusable="False">
+                                        <StackPanel Orientation="Vertical">
+                                            <StackPanel Orientation="Vertical">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="{x:Type StackPanel}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Text}">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        ToolTip="Font Family"
+                                                        Click="FontFamilyButton_Click">
+                                                    <TextBlock Text="Aa"
+                                                               FontFamily="Segoe UI"
+                                                               FontSize="11" />
+                                                </Button>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="Font Size"
+                                                        Click="FontSizeButton_Click">
+                                                    <TextBlock Text="A+"
+                                                               FontFamily="Segoe UI"
+                                                               FontSize="11" />
+                                                </Button>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="Bold"
+                                                        Click="BoldButton_Click">
+                                                    <TextBlock Text="B"
+                                                               FontFamily="Segoe UI"
+                                                               FontWeight="Bold"
+                                                               FontSize="12" />
+                                                </Button>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="Italic"
+                                                        Click="ItalicButton_Click">
+                                                    <TextBlock Text="I"
+                                                               FontFamily="Segoe UI"
+                                                               FontStyle="Italic"
+                                                               FontSize="12" />
+                                                </Button>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="Underline"
+                                                        Click="UnderlineButton_Click">
+                                                    <TextBlock Text="U"
+                                                               FontFamily="Segoe UI"
+                                                               TextDecorations="Underline"
+                                                               FontSize="12" />
+                                                </Button>
+                                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="Strikethrough"
+                                                        Click="StrikethroughButton_Click">
+                                                    <TextBlock Text="S"
+                                                               FontFamily="Segoe UI"
+                                                               TextDecorations="Strikethrough"
+                                                               FontSize="12" />
+                                                </Button>
+                                            </StackPanel>
+                                            <Separator Margin="0,6,0,6" />
+                                            <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                    ToolTip="Open Resource in New Window"
+                                                    Click="PopOutResourceButton_Click">
+                                                <TextBlock Text="&#xE740;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="14" />
+                                            </Button>
+                                            <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                    Margin="0,6,0,0"
+                                                    ToolTip="Save Resource"
+                                                    Command="{Binding SaveSelectedResourceCommand}">
+                                                <TextBlock Text="&#xE74E;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="14" />
+                                            </Button>
+                                        </StackPanel>
+                                    </ScrollViewer>
+
+                                    <Button Grid.Row="2"
+                                            Style="{StaticResource ToolbarScrollButtonStyle}"
+                                            ToolTip="Scroll toolbar down"
+                                            Click="InternalToolbarScrollDownButton_Click">
+                                        <TextBlock Text="&#xE70D;"
                                                    FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="15" />
+                                                   FontSize="10" />
                                     </Button>
-                                </StackPanel>
+                                </Grid>
                             </Border>
                         </Grid>
                     </Border>
@@ -431,7 +480,7 @@
                                 <TreeView x:Name="ResourceTree"
                                           Grid.Row="1"
                                           ItemsSource="{Binding ResourceGroups}"
-                                          SelectedItemChanged="ResourceTree_SelectedItemChanged"
+                                          MouseDoubleClick="ResourceTree_MouseDoubleClick"
                                           PreviewMouseMove="ResourceTree_PreviewMouseMove"
                                           PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
                                           ContextMenuOpening="ResourceTree_ContextMenuOpening"
@@ -456,59 +505,92 @@
                         </Border>
                     </Grid>
 
-                    <StackPanel Grid.Column="3"
-                                Orientation="Vertical"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Top"
-                                Margin="8,0,0,0">
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Text"
-                                Command="{Binding AddTextResourceCommand}">
-                            <TextBlock Text="&#xE8A5;"
+                    <Grid Grid.Column="3"
+                          Width="30"
+                          HorizontalAlignment="Right"
+                          Margin="6,0,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0"
+                                Style="{StaticResource ToolbarScrollButtonStyle}"
+                                ToolTip="Scroll toolbar up"
+                                Click="ResourceAddToolbarScrollUpButton_Click">
+                            <TextBlock Text="&#xE70E;"
                                        FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
+                                       FontSize="10" />
                         </Button>
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Sheet"
-                                Margin="0,8,0,0"
-                                Command="{Binding AddSheetResourceCommand}">
-                            <TextBlock Text="&#xE80A;"
+
+                        <ScrollViewer x:Name="ResourceAddToolbarScrollViewer"
+                                      Grid.Row="1"
+                                      Margin="0,4"
+                                      VerticalScrollBarVisibility="Hidden"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      CanContentScroll="False"
+                                      Focusable="False">
+                            <StackPanel Orientation="Vertical">
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Text"
+                                        Command="{Binding AddTextResourceCommand}">
+                                    <TextBlock Text="&#xE8A5;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Sheet"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddSheetResourceCommand}">
+                                    <TextBlock Text="&#xE80A;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Code Snippet"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddCodeResourceCommand}">
+                                    <TextBlock Text="&#xE943;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Image"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddImageResourceCommand}">
+                                    <TextBlock Text="&#xE91B;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Audio"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddAudioResourceCommand}">
+                                    <TextBlock Text="&#xE767;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Surf Resource"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddSurfResourceCommand}">
+                                    <TextBlock Text="&#xE774;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" />
+                                </Button>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <Button Grid.Row="2"
+                                Style="{StaticResource ToolbarScrollButtonStyle}"
+                                ToolTip="Scroll toolbar down"
+                                Click="ResourceAddToolbarScrollDownButton_Click">
+                            <TextBlock Text="&#xE70D;"
                                        FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
+                                       FontSize="10" />
                         </Button>
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Code Snippet"
-                                Margin="0,8,0,0"
-                                Command="{Binding AddCodeResourceCommand}">
-                            <TextBlock Text="&#xE943;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
-                        </Button>
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Image"
-                                Margin="0,8,0,0"
-                                Command="{Binding AddImageResourceCommand}">
-                            <TextBlock Text="&#xE91B;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
-                        </Button>
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Audio"
-                                Margin="0,8,0,0"
-                                Command="{Binding AddAudioResourceCommand}">
-                            <TextBlock Text="&#xE767;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
-                        </Button>
-                        <Button Style="{StaticResource RoundIconButtonStyle}"
-                                ToolTip="Surf Resource"
-                                Margin="0,8,0,0"
-                                Command="{Binding AddSurfResourceCommand}">
-                            <TextBlock Text="&#xE774;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="15" />
-                        </Button>
-                    </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </Expander>

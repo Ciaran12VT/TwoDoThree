@@ -1,8 +1,11 @@
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using TwoDoThree.Models;
 using TwoDoThree.ViewModels;
 
@@ -18,6 +21,23 @@ public partial class ActionListControl : UserControl
     private void ActionShortcutsInfoButton_Click(object sender, RoutedEventArgs e)
     {
         ActionShortcutsPopup.IsOpen = !ActionShortcutsPopup.IsOpen;
+    }
+
+    private void ActionListOptionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement button
+            || DataContext is not TaskDetailViewModel viewModel)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu();
+        AddMenuItem(menu, "Copy as Text", () => CopyActionsAsText(viewModel));
+        AddMenuItem(menu, "Copy as CSV", () => CopyActionsAsCsv(viewModel));
+        AddMenuItem(menu, "Export to CSV", () => ExportActionsAsCsv(viewModel));
+
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
     }
 
     private void ActionOptionsButton_Click(object sender, RoutedEventArgs e)
@@ -136,6 +156,91 @@ public partial class ActionListControl : UserControl
         {
             e.Handled = FocusRelativeActionTextBox(action, -1, moveToEnd: true);
         }
+    }
+
+    private static void CopyActionsAsText(TaskDetailViewModel viewModel)
+    {
+        SetClipboardText(CreateActionsText(viewModel.Actions));
+    }
+
+    private static void CopyActionsAsCsv(TaskDetailViewModel viewModel)
+    {
+        SetClipboardText(CreateActionsCsv(viewModel.Actions));
+    }
+
+    private static void ExportActionsAsCsv(TaskDetailViewModel viewModel)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export action list",
+            FileName = $"{GetSafeFileName(viewModel.Task.Title)} actions.csv",
+            Filter = "CSV files|*.csv|All files|*.*",
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        File.WriteAllText(dialog.FileName, CreateActionsCsv(viewModel.Actions), Encoding.UTF8);
+    }
+
+    private static string CreateActionsText(IEnumerable<ActionItem> actions)
+    {
+        return string.Join(
+            Environment.NewLine,
+            actions.Select(action =>
+                $"{new string('\t', action.IndentLevel)}{action.ActionNumber} {action.ActionText} [{FormatStatus(action.Status)}]"));
+    }
+
+    private static string CreateActionsCsv(IEnumerable<ActionItem> actions)
+    {
+        var lines = new List<string>
+        {
+            "ActionNumber,ActionText,Status,IndentLevel"
+        };
+
+        lines.AddRange(actions.Select(action => string.Join(
+            ",",
+            EscapeCsv(action.ActionNumber),
+            EscapeCsv(action.ActionText),
+            EscapeCsv(FormatStatus(action.Status)),
+            action.IndentLevel.ToString())));
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        if (!value.Contains('"') && !value.Contains(',') && !value.Contains('\r') && !value.Contains('\n'))
+        {
+            return value;
+        }
+
+        return $"\"{value.Replace("\"", "\"\"")}\"";
+    }
+
+    private static void SetClipboardText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            Clipboard.Clear();
+            return;
+        }
+
+        Clipboard.SetText(text);
+    }
+
+    private static string GetSafeFileName(string value)
+    {
+        var fileName = string.IsNullOrWhiteSpace(value) ? "Task" : value.Trim();
+        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        {
+            fileName = fileName.Replace(invalidChar, '-');
+        }
+
+        return fileName;
     }
 
     private static void AddMenuItem(ItemsControl menu, string header, Action action)

@@ -48,26 +48,7 @@ public sealed class TaskItem : ObservableObject
     public TaskStatus Status
     {
         get => status;
-        set
-        {
-            var previousStatus = status;
-            if (previousStatus == value)
-            {
-                return;
-            }
-
-            if (value == TaskStatus.Active)
-            {
-                statusBeforeActive = previousStatus;
-                OnPropertyChanged(nameof(StatusBeforeActive));
-            }
-
-            if (SetProperty(ref status, value))
-            {
-                UpdatedOn = DateTime.Now;
-                AddStatusChangeActivity(previousStatus, value);
-            }
-        }
+        set => SetStatus(value);
     }
 
     public TaskStatus StatusBeforeActive => statusBeforeActive;
@@ -108,6 +89,27 @@ public sealed class TaskItem : ObservableObject
 
     public ObservableCollection<TaskActivity> Activities { get; } = new();
 
+    public void SetStatus(TaskStatus newStatus, string statusMessage = "")
+    {
+        var previousStatus = status;
+        if (previousStatus == newStatus)
+        {
+            return;
+        }
+
+        if (newStatus == TaskStatus.Active)
+        {
+            statusBeforeActive = previousStatus;
+            OnPropertyChanged(nameof(StatusBeforeActive));
+        }
+
+        if (SetProperty(ref status, newStatus, nameof(Status)))
+        {
+            UpdatedOn = DateTime.Now;
+            AddStatusChangeActivity(previousStatus, newStatus, statusMessage);
+        }
+    }
+
     public void AddActivity(string activity)
     {
         Activities.Add(new TaskActivity
@@ -117,14 +119,15 @@ public sealed class TaskItem : ObservableObject
         });
     }
 
-    private void AddStatusChangeActivity(TaskStatus fromStatus, TaskStatus toStatus)
+    private void AddStatusChangeActivity(TaskStatus fromStatus, TaskStatus toStatus, string statusMessage)
     {
         Activities.Add(new TaskActivity
         {
             OccurredOn = DateTime.Now,
             Activity = $"Status changed from {FormatStatus(fromStatus)} to {FormatStatus(toStatus)}.",
             FromStatus = fromStatus,
-            ToStatus = toStatus
+            ToStatus = toStatus,
+            StatusMessage = statusMessage.Trim()
         });
     }
 

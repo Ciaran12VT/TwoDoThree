@@ -202,10 +202,11 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
             return;
         }
 
-        var caretOffset = CaretCharacterIndex;
+        var caretPosition = CaretPosition;
+        UpdateBoundPlainText();
         ApplyResourceLinkFormatting();
-        UpdateBoundTextAndFormatting();
-        CaretPosition = GetTextPointerAtCharOffset(caretOffset) ?? Document.ContentEnd;
+        UpdateBoundFormattedText();
+        CaretPosition = caretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
     }
 
     private void ResourceLinkRichTextBox_PreviewDragOver(object sender, DragEventArgs e)
@@ -258,18 +259,35 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
 
     private void UpdateBoundTextAndFormatting()
     {
+        UpdateBoundPlainText();
+        UpdateBoundFormattedText();
+    }
+
+    private void UpdateBoundPlainText()
+    {
         isUpdatingText = true;
-        isUpdatingFormattedText = true;
 
         try
         {
             Text = GetDocumentText();
+        }
+        finally
+        {
+            isUpdatingText = false;
+        }
+    }
+
+    private void UpdateBoundFormattedText()
+    {
+        isUpdatingFormattedText = true;
+
+        try
+        {
             FormattedText = GetDocumentFormattedText();
         }
         finally
         {
             isUpdatingFormattedText = false;
-            isUpdatingText = false;
         }
     }
 

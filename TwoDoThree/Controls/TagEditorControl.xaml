@@ -1,0 +1,46 @@
+<UserControl x:Class="TwoDoThree.Controls.TagEditorControl"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBox x:Name="TagsTextBox"
+                 Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 TextChanged="TagsTextBox_TextChanged"
+                 PreviewKeyDown="TagsTextBox_PreviewKeyDown"
+                 GotKeyboardFocus="TagsTextBox_GotKeyboardFocus"
+                 LostKeyboardFocus="TagsTextBox_LostKeyboardFocus" />
+
+        <Button Grid.Column="1"
+                Width="30"
+                MinHeight="28"
+                Margin="6,0,0,0"
+                Padding="0"
+                ToolTip="Manage tags"
+                Click="ManageTagsButton_Click">
+            <TextBlock Text="&#xE710;"
+                       FontFamily="Segoe MDL2 Assets"
+                       FontSize="12" />
+        </Button>
+
+        <Popup x:Name="SuggestionsPopup"
+               PlacementTarget="{Binding ElementName=TagsTextBox}"
+               Placement="Bottom"
+               AllowsTransparency="True"
+               StaysOpen="False">
+            <Border Width="{Binding ActualWidth, ElementName=TagsTextBox}"
+                    MaxHeight="180"
+                    Background="#FFFFFF"
+                    BorderBrush="{StaticResource MutedBorderBrush}"
+                    BorderThickness="1">
+                <ListBox x:Name="SuggestionsListBox"
+                         ItemsSource="{Binding FilteredTags, ElementName=Root}"
+                         PreviewMouseLeftButtonUp="SuggestionsListBox_PreviewMouseLeftButtonUp" />
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

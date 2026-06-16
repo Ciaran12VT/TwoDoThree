@@ -195,6 +195,15 @@
                         </StackPanel>
                     </Border>
                 </Popup>
+                <Button x:Name="ActionListOptionsButton"
+                        Style="{StaticResource RoundOptionsButtonStyle}"
+                        ToolTip="Action List Options"
+                        Margin="8,2,0,2"
+                        Click="ActionListOptionsButton_Click">
+                    <TextBlock Text="&#xE700;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="13" />
+                </Button>
                 <Button Style="{StaticResource RoundAddButtonStyle}"
                         ToolTip="Add Action"
                         Margin="8,0,0,0"

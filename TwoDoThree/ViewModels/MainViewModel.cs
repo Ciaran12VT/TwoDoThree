@@ -1,19 +1,26 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Threading;
 using System.Windows.Data;
 using TwoDoThree.Models;
+using TwoDoThree.Services;
 using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
 namespace TwoDoThree.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
-    private readonly List<EmailMessage> configuredAccountMessages = new();
+    private readonly IEmailProvider emailProvider;
+    private readonly IEmailImportService emailImportService;
+    private readonly IEmailCacheStore emailCacheStore;
     private readonly DispatcherTimer activeTaskTimer;
+    private readonly DispatcherTimer emailSyncTimer;
     private bool isEnforcingActiveTask;
+    private bool isEmailSyncing;
     private int nextTaskId = 1004;
+    private string emailSyncStatus = string.Empty;
     private string searchText = string.Empty;
     private EmailMessage? taskEmailFilter;
     private EmailMessage? selectedEmail;
@@ -21,16 +28,22 @@ public sealed class MainViewModel : ObservableObject
     private bool isEmailSectionExpanded = true;
     private bool isTaskSectionExpanded = true;
 
-    public MainViewModel()
+    public MainViewModel(
+        AppSettings settings,
+        IEmailProvider emailProvider,
+        IEmailImportService emailImportService,
+        IEmailCacheStore emailCacheStore)
     {
-        Settings = new AppSettings();
+        Settings = settings;
+        this.emailProvider = emailProvider;
+        this.emailImportService = emailImportService;
+        this.emailCacheStore = emailCacheStore;
         EmailsView = CollectionViewSource.GetDefaultView(Emails);
         TasksView = CollectionViewSource.GetDefaultView(Tasks);
         EmailsView.Filter = FilterEmail;
         TasksView.Filter = FilterTask;
 
-        SeedInbox();
-        RefreshEmails();
+        LoadCachedEmails();
         SeedTasks();
         RefreshEmailTaskAssociations();
         RecalculateAllTaskTimeSpent();
@@ -41,6 +54,11 @@ public sealed class MainViewModel : ObservableObject
         };
         activeTaskTimer.Tick += (_, _) => UpdateActiveTaskTimeSpent();
         activeTaskTimer.Start();
+
+        emailSyncTimer = new DispatcherTimer();
+        emailSyncTimer.Tick += async (_, _) => await RefreshEmailsAsync(null, allowInteractiveSignIn: false);
+        UpdateEmailSyncInterval();
+        emailSyncTimer.Start();
     }
 
     public AppSettings Settings { get; }
@@ -96,6 +114,26 @@ public sealed class MainViewModel : ObservableObject
 
     public bool HasTaskEmailFilter => taskEmailFilter is not null;
 
+    public string EmailSyncStatus
+    {
+        get => emailSyncStatus;
+        set => SetProperty(ref emailSyncStatus, value);
+    }
+
+    public bool IsEmailSyncing
+    {
+        get => isEmailSyncing;
+        set
+        {
+            if (SetProperty(ref isEmailSyncing, value))
+            {
+                OnPropertyChanged(nameof(CanRefreshEmail));
+            }
+        }
+    }
+
+    public bool CanRefreshEmail => !IsEmailSyncing;
+
     public TaskItem CreateEmptyTask()
     {
         var task = CreateTask("New task", "manual");
@@ -144,9 +182,9 @@ public sealed class MainViewModel : ObservableObject
         SelectedTask = TasksView.Cast<TaskItem>().FirstOrDefault();
     }
 
-    public void SetTaskStatus(TaskItem task, TaskItemStatus status)
+    public void SetTaskStatus(TaskItem task, TaskItemStatus status, string statusMessage = "")
     {
-        task.Status = status;
+        task.SetStatus(status, statusMessage);
         UpdateTaskTimeSpent(task);
         TasksView.Refresh();
     }
@@ -156,20 +194,136 @@ public sealed class MainViewModel : ObservableObject
         SetTaskStatus(task, TaskItemStatus.Active);
     }
 
-    public void RefreshEmails()
+    public async Task InitializeEmailAsync(Window owner)
     {
+        await RefreshEmailsAsync(owner, allowInteractiveSignIn: false);
+    }
+
+    public async Task RefreshEmailsAsync(Window? owner, bool allowInteractiveSignIn)
+    {
+        if (IsEmailSyncing)
+        {
+            return;
+        }
+
+        IsEmailSyncing = true;
+        EmailSyncStatus = GetSyncStartMessage();
+
+        try
+        {
+            var result = await emailProvider.RefreshInboxAsync(
+                Settings.Email,
+                allowInteractiveSignIn,
+                owner,
+                CancellationToken.None);
+            ReplaceEmails(result.Messages);
+            EmailSyncStatus = result.StatusMessage;
+        }
+        finally
+        {
+            IsEmailSyncing = false;
+            UpdateEmailSyncInterval();
+        }
+    }
+
+    public void LoadCachedEmails()
+    {
+        var messages = emailProvider.LoadCachedMessages();
+        ReplaceEmails(messages);
+        EmailSyncStatus = messages.Count > 0 ? $"Loaded {messages.Count} cached emails." : GetEmptyEmailStatus();
+    }
+
+    public async Task ImportEmailFilesAsync(IEnumerable<string> filePaths)
+    {
+        var importedMessages = await emailImportService.ImportAsync(filePaths, CancellationToken.None);
+        if (importedMessages.Count == 0)
+        {
+            EmailSyncStatus = "No .eml or .msg emails were imported.";
+            return;
+        }
+
+        MergeEmails(importedMessages);
+        emailCacheStore.Save(Emails);
+        EmailSyncStatus = $"Imported {importedMessages.Count} email file{(importedMessages.Count == 1 ? string.Empty : "s")}.";
+    }
+
+    public void UpdateEmailSyncInterval()
+    {
+        emailSyncTimer.Interval = TimeSpan.FromMinutes(Settings.Email.SyncIntervalMinutes);
+    }
+
+    private void ReplaceEmails(IEnumerable<EmailMessage> messages)
+    {
+        var previousSelectedId = SelectedEmail?.Id;
         Emails.Clear();
 
-        if (Settings.Email.IsConfigured)
+        foreach (var message in messages)
         {
-            foreach (var message in configuredAccountMessages)
+            Emails.Add(message);
+        }
+
+        RefreshEmailTaskAssociations();
+        SelectedEmail = Emails.FirstOrDefault(email =>
+                            !string.IsNullOrWhiteSpace(previousSelectedId)
+                            && string.Equals(email.Id, previousSelectedId, StringComparison.OrdinalIgnoreCase))
+                        ?? Emails.FirstOrDefault();
+        EmailsView.Refresh();
+    }
+
+    private void MergeEmails(IEnumerable<EmailMessage> messages)
+    {
+        var byId = Emails
+            .Where(email => !string.IsNullOrWhiteSpace(email.Id))
+            .ToDictionary(email => email.Id, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var message in messages)
+        {
+            if (!string.IsNullOrWhiteSpace(message.Id) && byId.ContainsKey(message.Id))
             {
-                Emails.Add(message);
+                continue;
+            }
+
+            Emails.Add(message);
+            if (!string.IsNullOrWhiteSpace(message.Id))
+            {
+                byId[message.Id] = message;
             }
         }
 
-        SelectedEmail = Emails.FirstOrDefault();
+        var ordered = Emails.OrderByDescending(email => email.ReceivedOn).ToList();
+        Emails.Clear();
+        foreach (var email in ordered)
+        {
+            Emails.Add(email);
+        }
+
+        RefreshEmailTaskAssociations();
+        SelectedEmail ??= Emails.FirstOrDefault();
         EmailsView.Refresh();
+    }
+
+    private string GetSyncStartMessage()
+    {
+        return Settings.Email.Source switch
+        {
+            EmailSource.MicrosoftGraph => Settings.Email.IsConfigured
+                ? "Syncing Microsoft Graph Outlook..."
+                : "Configure a Microsoft Entra client ID to sync Outlook with Graph.",
+            EmailSource.ClassicOutlook => "Syncing Classic Outlook...",
+            EmailSource.ManualImport => "Manual import selected.",
+            _ => "Syncing email..."
+        };
+    }
+
+    private string GetEmptyEmailStatus()
+    {
+        return Settings.Email.Source switch
+        {
+            EmailSource.MicrosoftGraph => "Configure a Microsoft Entra client ID to sync Outlook with Graph.",
+            EmailSource.ClassicOutlook => "Classic Outlook selected. Refresh to read the local Outlook Inbox.",
+            EmailSource.ManualImport => "Manual import selected. Import .eml or .msg files.",
+            _ => "No emails loaded."
+        };
     }
 
     private TaskItem CreateTask(string title, string tags)
@@ -293,40 +447,6 @@ public sealed class MainViewModel : ObservableObject
         return value.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
-    private void SeedInbox()
-    {
-        configuredAccountMessages.AddRange(
-        [
-            new EmailMessage
-            {
-                Id = "em-001",
-                From = "Maya Rodriguez",
-                Subject = "Quarterly planning notes",
-                ReceivedOn = DateTime.Now.AddHours(-4),
-                Preview = "Attaching the outline we discussed for next quarter.",
-                Body = "Attaching the outline we discussed for next quarter. The main decision is whether to split the migration work into two phases or keep it behind a single launch date."
-            },
-            new EmailMessage
-            {
-                Id = "em-002",
-                From = "Alex Chen",
-                Subject = "Follow-up: onboarding checklist",
-                ReceivedOn = DateTime.Now.AddDays(-1).AddMinutes(-20),
-                Preview = "Can you turn the remaining onboarding items into trackable tasks?",
-                Body = "Can you turn the remaining onboarding items into trackable tasks? The highest priority items are access review, first-week walkthrough, and the support escalation map."
-            },
-            new EmailMessage
-            {
-                Id = "em-003",
-                From = "Nina Patel",
-                Subject = "Screenshot for image resource test",
-                ReceivedOn = DateTime.Now.AddDays(-2),
-                Preview = "This one may be useful as a resource once image importing is wired.",
-                Body = "This one may be useful as a resource once image importing is wired. The design review notes are inline below the image in the original thread."
-            }
-        ]);
-    }
-
     private void SeedTasks()
     {
         var task = CreateTask("Prepare onboarding task flow", "onboarding, process");
@@ -387,7 +507,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void RefreshEmailTaskAssociations()
     {
-        foreach (var email in configuredAccountMessages)
+        foreach (var email in Emails)
         {
             var taskNames = Tasks
                 .Where(task => TaskHasEmailResource(task, email))
@@ -432,7 +552,7 @@ public sealed class MainViewModel : ObservableObject
                     ? TaskItemStatus.Inactive
                     : task.StatusBeforeActive;
 
-                task.Status = restoreStatus;
+                task.SetStatus(restoreStatus);
                 UpdateTaskTimeSpent(task);
             }
         }

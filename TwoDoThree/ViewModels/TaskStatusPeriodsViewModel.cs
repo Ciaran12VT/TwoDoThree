@@ -19,6 +19,7 @@ public sealed class TaskStatusPeriodsViewModel
     private static IEnumerable<TaskStatusPeriod> BuildPeriods(TaskItem task, DateTime now)
     {
         var currentStatus = TaskItemStatus.Inactive;
+        var currentStatusMessage = string.Empty;
         var periodStart = task.CreatedOn;
 
         foreach (var activity in task.Activities
@@ -32,12 +33,14 @@ public sealed class TaskStatusPeriodsViewModel
                 yield return new TaskStatusPeriod
                 {
                     Status = currentStatus,
+                    StatusMessage = currentStatusMessage,
                     StartTime = periodStart,
                     EndTime = activity.OccurredOn
                 };
             }
 
             currentStatus = nextStatus;
+            currentStatusMessage = activity.StatusMessage;
             periodStart = activity.OccurredOn;
         }
 
@@ -46,6 +49,7 @@ public sealed class TaskStatusPeriodsViewModel
             yield return new TaskStatusPeriod
             {
                 Status = currentStatus,
+                StatusMessage = currentStatusMessage,
                 StartTime = periodStart,
                 EndTime = now,
                 IsCurrent = task.Status == currentStatus
