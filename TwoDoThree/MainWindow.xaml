@@ -203,23 +203,26 @@
                   SizeChanged="SectionExpander_SizeChanged"
                   Margin="0,0,0,12">
             <Expander.Header>
-                <DockPanel x:Name="EmailHeaderPanel"
-                           LastChildFill="False">
-                    <TextBlock Text="Emails"
-                               VerticalAlignment="Center" />
-                    <TextBox Width="260"
-                             Height="24"
-                             MinHeight="24"
-                             Margin="10,0,0,0"
-                             Padding="6,2"
-                             VerticalContentAlignment="Center"
-                             ToolTip="Filter emails"
-                             PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
-                             Text="{Binding EmailSearchText, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                Margin="20,0,0,0">
+                <Grid x:Name="EmailHeaderPanel">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Emails"
+                                   VerticalAlignment="Center" />
+                        <TextBox Width="260"
+                                 Height="24"
+                                 MinHeight="24"
+                                 Margin="10,0,0,0"
+                                 Padding="6,2"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Filter emails"
+                                 PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
+                                 Text="{Binding EmailSearchText, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="{Binding EmailSyncStatus}"
+                                   Margin="12,0,0,0"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    FontSize="12"
                                    VerticalAlignment="Center"
@@ -248,8 +251,12 @@
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="12" />
                         </Button>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
                         <Button Style="{StaticResource RoundHeaderIconButtonStyle}"
-                                Margin="6,0,0,0"
                                 ToolTip="Settings"
                                 Click="SettingsButton_Click">
                             <TextBlock FontFamily="Segoe MDL2 Assets"
@@ -259,7 +266,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                     </StackPanel>
-                </DockPanel>
+                </Grid>
             </Expander.Header>
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource MutedBorderBrush}"
@@ -374,23 +381,26 @@
                   IsExpanded="{Binding IsTaskSectionExpanded}"
                   SizeChanged="SectionExpander_SizeChanged">
             <Expander.Header>
-                <DockPanel x:Name="TasksHeaderPanel"
-                           LastChildFill="False">
-                    <TextBlock Text="Tasks"
-                               VerticalAlignment="Center" />
-                    <TextBox Width="260"
-                             Height="24"
-                             MinHeight="24"
-                             Margin="10,0,0,0"
-                             Padding="6,2"
-                             VerticalContentAlignment="Center"
-                             ToolTip="Filter tasks"
-                             PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
-                             Text="{Binding TaskSearchText, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                Margin="20,0,0,0">
+                <Grid x:Name="TasksHeaderPanel">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Tasks"
+                                   VerticalAlignment="Center" />
+                        <TextBox Width="260"
+                                 Height="24"
+                                 MinHeight="24"
+                                 Margin="10,0,0,0"
+                                 Padding="6,2"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Filter tasks"
+                                 PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
+                                 Text="{Binding TaskSearchText, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="{Binding TaskPersistenceStatus}"
+                                   Margin="12,0,0,0"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    FontSize="12"
                                    VerticalAlignment="Center"
@@ -436,8 +446,12 @@
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="10" />
                         </Button>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
                         <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
-                                      Margin="12,0,0,0"
                                       IsChecked="{Binding IsGridTaskView, Mode=TwoWay}"
                                       ToolTip="Grid view">
                             <TextBlock Text="&#xE80A;"
@@ -461,7 +475,7 @@
                                        FontSize="12" />
                         </ToggleButton>
                     </StackPanel>
-                </DockPanel>
+                </Grid>
             </Expander.Header>
             <Border Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource MutedBorderBrush}"
