@@ -1,0 +1,134 @@
+<UserControl x:Class="TwoDoThree.Controls.ResourceViewerControl"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:TwoDoThree.Controls"
+             xmlns:models="clr-namespace:TwoDoThree.Models">
+    <UserControl.Resources>
+        <DataTemplate x:Key="TextResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <controls:ResourceLinkRichTextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              FormattedText="{Binding FormattedContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              VerticalScrollBarVisibility="Auto"
+                                              BorderThickness="0"
+                                              Background="#FFFFFF" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="CodeResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <controls:CodeSnippetEditor Resource="{Binding}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="SheetResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <controls:SheetEditor Resource="{Binding}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="EmailResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="{Binding EmailSubject}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap" />
+                <TextBlock Grid.Row="1"
+                           Margin="0,8,0,0"
+                           Text="{Binding EmailFrom, StringFormat='From: {0}'}"
+                           Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Grid.Row="2"
+                           Margin="0,2,0,10"
+                           Text="{Binding EmailReceivedOn, StringFormat='Received: {0:g}'}"
+                           Foreground="{StaticResource MutedTextBrush}" />
+                <TextBox Grid.Row="3"
+                         Text="{Binding Content}"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         BorderThickness="0"
+                         Background="#FFFFFF" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ImageResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border BorderBrush="{StaticResource MutedBorderBrush}"
+                        BorderThickness="1"
+                        Background="#F9FAFB"
+                        Cursor="Hand"
+                        MouseLeftButtonDown="ImageResource_MouseLeftButtonDown"
+                        ToolTip="Double-click to open image">
+                    <Image Source="{Binding Content}"
+                           Stretch="Uniform"
+                           MouseLeftButtonDown="ImageResource_MouseLeftButtonDown" />
+                </Border>
+                <TextBlock Grid.Row="1"
+                           Margin="0,8,0,0"
+                           Text="{Binding Content}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AudioResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <StackPanel>
+                <TextBlock Text="{Binding Name}"
+                           FontSize="16"
+                           FontWeight="SemiBold" />
+                <TextBlock Margin="0,6,0,14"
+                           Text="{Binding Content}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap" />
+                <MediaElement Source="{Binding Content}"
+                              Height="42"
+                              LoadedBehavior="Manual"
+                              UnloadedBehavior="Stop" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SurfResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <Border BorderBrush="{StaticResource MutedBorderBrush}"
+                    BorderThickness="1"
+                    Background="#F9FAFB"
+                    Padding="16">
+                <TextBlock Text="{Binding Content}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedTextBrush}" />
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ContentControl Content="{Binding Resource, ElementName=Root}">
+        <ContentControl.Style>
+            <Style TargetType="{x:Type ContentControl}">
+                <Setter Property="ContentTemplate" Value="{StaticResource TextResourceTemplate}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.CodeSnippet}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource CodeResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.Email}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource EmailResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.Sheet}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource SheetResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.Image}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource ImageResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.Audio}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource AudioResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.SurfResource}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource SurfResourceTemplate}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ContentControl.Style>
+    </ContentControl>
+</UserControl>

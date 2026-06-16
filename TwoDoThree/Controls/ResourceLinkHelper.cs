@@ -13,6 +13,8 @@ public static class ResourceLinkHelper
 
     private static readonly Regex LinkRegex = new(@"\[\[(?<name>[^\]]+)\]\]", RegexOptions.Compiled);
 
+    public readonly record struct ResourceLinkMatch(int Index, int Length, string Name);
+
     public static DataObject CreateDataObject(ResourceItem resource)
     {
         var data = new DataObject();
@@ -49,6 +51,19 @@ public static class ResourceLinkHelper
         }
 
         return null;
+    }
+
+    public static IEnumerable<ResourceLinkMatch> GetResourceLinks(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            yield break;
+        }
+
+        foreach (Match match in LinkRegex.Matches(text))
+        {
+            yield return new ResourceLinkMatch(match.Index, match.Length, match.Groups["name"].Value);
+        }
     }
 
     public static bool TryOpenResource(string? resourceName, DependencyObject source)

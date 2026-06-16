@@ -233,14 +233,12 @@
                                     Background="{Binding Status, Converter={StaticResource ActionStatusToBrushConverter}}"
                                     BorderBrush="#D1D5DB"
                                     BorderThickness="1">
-                                <TextBox Text="{Binding ActionText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         BorderThickness="0"
-                                         Background="Transparent"
-                                         TextWrapping="Wrap"
-                                         MinHeight="24"
-                                         controls:ResourceLinkTextBox.IsEnabled="True"
-                                         GotKeyboardFocus="ActionTextBox_GotKeyboardFocus"
-                                         PreviewKeyDown="ActionTextBox_PreviewKeyDown" />
+                                <controls:ResourceLinkRichTextBox Text="{Binding ActionText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  BorderThickness="0"
+                                                                  Background="Transparent"
+                                                                  MinHeight="24"
+                                                                  GotKeyboardFocus="ActionTextBox_GotKeyboardFocus"
+                                                                  PreviewKeyDown="ActionTextBox_PreviewKeyDown" />
                             </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

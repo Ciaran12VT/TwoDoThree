@@ -7,6 +7,7 @@ public sealed class ResourceItem : ObservableObject
     private string name = string.Empty;
     private ResourceKind kind;
     private string content = string.Empty;
+    private string formattedContent = string.Empty;
     private string codeLanguage = "C#";
     private string emailMessageId = string.Empty;
     private string emailFrom = string.Empty;
@@ -29,6 +30,12 @@ public sealed class ResourceItem : ObservableObject
     {
         get => content;
         set => SetProperty(ref content, value);
+    }
+
+    public string FormattedContent
+    {
+        get => formattedContent;
+        set => SetProperty(ref formattedContent, value);
     }
 
     public string CodeLanguage

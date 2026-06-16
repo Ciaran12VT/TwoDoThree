@@ -2,13 +2,18 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Highlighting;
+using ICSharpCode.AvalonEdit.Rendering;
 using TwoDoThree.Models;
 
 namespace TwoDoThree.Controls;
 
 public partial class CodeSnippetEditor : UserControl
 {
+    private static readonly SolidColorBrush LinkBrush = new(Color.FromRgb(37, 99, 235));
+
     public static readonly DependencyProperty ResourceProperty =
         DependencyProperty.Register(
             nameof(Resource),
@@ -24,6 +29,7 @@ public partial class CodeSnippetEditor : UserControl
         InitializeComponent();
         Editor.Options.ConvertTabsToSpaces = true;
         Editor.Options.IndentationSize = 4;
+        Editor.TextArea.TextView.LineTransformers.Add(new ResourceLinkColorizer());
     }
 
     public ResourceItem? Resource
@@ -164,5 +170,29 @@ public partial class CodeSnippetEditor : UserControl
         Editor.SyntaxHighlighting = string.IsNullOrWhiteSpace(language)
             ? null
             : HighlightingManager.Instance.GetDefinition(language);
+    }
+
+    private sealed class ResourceLinkColorizer : DocumentColorizingTransformer
+    {
+        protected override void ColorizeLine(DocumentLine line)
+        {
+            var lineText = CurrentContext.Document.GetText(line);
+
+            foreach (var link in ResourceLinkHelper.GetResourceLinks(lineText))
+            {
+                ChangeLinePart(
+                    line.Offset + link.Index,
+                    line.Offset + link.Index + link.Length,
+                    element =>
+                    {
+                        element.TextRunProperties.SetForegroundBrush(LinkBrush);
+                        element.TextRunProperties.SetTypeface(new Typeface(
+                            element.TextRunProperties.Typeface.FontFamily,
+                            element.TextRunProperties.Typeface.Style,
+                            FontWeights.Bold,
+                            element.TextRunProperties.Typeface.Stretch));
+                    });
+            }
+        }
     }
 }

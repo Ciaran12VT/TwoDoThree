@@ -12,11 +12,13 @@ public sealed class TaskDetailViewModel : ObservableObject
 {
     private ResourceItem? selectedResource;
     private ActionItem? selectedAction;
+    private string resourceSearchText = string.Empty;
 
     public TaskDetailViewModel(TaskItem task)
     {
         Task = task;
         AddTextResourceCommand = new RelayCommand(_ => AddTextResource());
+        AddSheetResourceCommand = new RelayCommand(_ => AddSheetResource());
         AddCodeResourceCommand = new RelayCommand(_ => AddCodeResource());
         AddImageResourceCommand = new RelayCommand(_ => AddImageResource());
         AddAudioResourceCommand = new RelayCommand(_ => AddFileResource(ResourceKind.Audio));
@@ -55,7 +57,21 @@ public sealed class TaskDetailViewModel : ObservableObject
         }
     }
 
+    public string ResourceSearchText
+    {
+        get => resourceSearchText;
+        set
+        {
+            if (SetProperty(ref resourceSearchText, value))
+            {
+                RefreshResourceGroups();
+            }
+        }
+    }
+
     public ICommand AddTextResourceCommand { get; }
+
+    public ICommand AddSheetResourceCommand { get; }
 
     public ICommand AddCodeResourceCommand { get; }
 
@@ -299,6 +315,10 @@ public sealed class TaskDetailViewModel : ObservableObject
         {
             File.Copy(resource.Content, dialog.FileName, overwrite: true);
         }
+        else if (resource.Kind == ResourceKind.Sheet)
+        {
+            File.WriteAllText(dialog.FileName, SheetResourceSerializer.ToCsv(resource.Content));
+        }
         else
         {
             File.WriteAllText(dialog.FileName, resource.Content);
@@ -310,6 +330,7 @@ public sealed class TaskDetailViewModel : ObservableObject
         var name = string.IsNullOrWhiteSpace(resource.Name) ? "Resource" : resource.Name;
         var extension = resource.Kind switch
         {
+            ResourceKind.Sheet => ".csv",
             ResourceKind.CodeSnippet => GetCodeExtension(resource.CodeLanguage),
             ResourceKind.Image => Path.GetExtension(resource.Content),
             ResourceKind.Audio => Path.GetExtension(resource.Content),
@@ -328,6 +349,7 @@ public sealed class TaskDetailViewModel : ObservableObject
     {
         return resource.Kind switch
         {
+            ResourceKind.Sheet => "CSV files|*.csv|All files|*.*",
             ResourceKind.CodeSnippet => "Code files|*.cs;*.xml;*.html;*.css;*.js;*.ps1;*.cpp;*.java;*.php;*.vb;*.txt|All files|*.*",
             ResourceKind.Image => "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All files|*.*",
             ResourceKind.Audio => "Audio files|*.mp3;*.wav;*.wma;*.m4a|All files|*.*",
@@ -351,6 +373,16 @@ public sealed class TaskDetailViewModel : ObservableObject
             "VBNET" => ".vb",
             _ => ".txt"
         };
+    }
+
+    private void AddSheetResource()
+    {
+        AddResource(new ResourceItem
+        {
+            Name = $"Sheet {Task.Resources.Count(r => r.Kind == ResourceKind.Sheet) + 1}",
+            Kind = ResourceKind.Sheet,
+            Content = SheetResourceSerializer.CreateDefaultContent()
+        });
     }
 
     private void AddCodeResource()
@@ -467,16 +499,23 @@ public sealed class TaskDetailViewModel : ObservableObject
     private void RebuildResourceGroups()
     {
         ResourceGroups.Clear();
+        var filter = ResourceSearchText.Trim();
 
         foreach (var kind in Enum.GetValues<ResourceKind>())
         {
             var group = new ResourceGroup(kind);
-            foreach (var resource in Task.Resources.Where(resource => resource.Kind == kind))
+            foreach (var resource in Task.Resources.Where(resource =>
+                         resource.Kind == kind
+                         && (string.IsNullOrWhiteSpace(filter)
+                             || resource.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))))
             {
                 group.Resources.Add(resource);
             }
 
-            ResourceGroups.Add(group);
+            if (string.IsNullOrWhiteSpace(filter) || group.Resources.Count > 0)
+            {
+                ResourceGroups.Add(group);
+            }
         }
     }
 

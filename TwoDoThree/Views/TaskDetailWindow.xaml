@@ -55,17 +55,18 @@
         </Style>
 
         <DataTemplate x:Key="TextResourceTemplate" DataType="{x:Type models:ResourceItem}">
-            <TextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
-                     BorderThickness="0"
-                     controls:ResourceLinkTextBox.IsEnabled="True"
-                     Background="#FFFFFF" />
+            <controls:ResourceLinkRichTextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              VerticalScrollBarVisibility="Auto"
+                                              BorderThickness="0"
+                                              Background="#FFFFFF" />
         </DataTemplate>
 
         <DataTemplate x:Key="CodeResourceTemplate" DataType="{x:Type models:ResourceItem}">
             <controls:CodeSnippetEditor Resource="{Binding}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="SheetResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <controls:SheetEditor Resource="{Binding}" />
         </DataTemplate>
 
         <DataTemplate x:Key="EmailResourceTemplate" DataType="{x:Type models:ResourceItem}">
@@ -290,52 +291,104 @@
                             Background="#FFFFFF"
                             Padding="10">
                         <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                            <Border Grid.Row="0"
+                            <controls:ResourceViewerControl x:Name="SelectedResourceViewer"
+                                                            Grid.Column="0"
+                                                            Resource="{Binding SelectedResource}" />
+
+                            <Border Grid.Column="1"
+                                    Margin="10,0,0,0"
+                                    Padding="8,0,0,0"
                                     BorderBrush="{StaticResource MutedBorderBrush}"
-                                    BorderThickness="0,0,0,1"
-                                    Padding="0,0,0,8"
-                                    Margin="0,0,0,8">
-                                <DockPanel LastChildFill="False">
-                                    <Button DockPanel.Dock="Right"
-                                            Style="{StaticResource RoundIconButtonStyle}"
+                                    BorderThickness="1,0,0,0">
+                                <StackPanel Orientation="Vertical"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top">
+                                    <StackPanel Orientation="Vertical">
+                                        <StackPanel.Style>
+                                            <Style TargetType="{x:Type StackPanel}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Text}">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                ToolTip="Font Family"
+                                                Click="FontFamilyButton_Click">
+                                            <TextBlock Text="Aa"
+                                                       FontFamily="Segoe UI"
+                                                       FontSize="12" />
+                                        </Button>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                ToolTip="Font Size"
+                                                Click="FontSizeButton_Click">
+                                            <TextBlock Text="A+"
+                                                       FontFamily="Segoe UI"
+                                                       FontSize="12" />
+                                        </Button>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                ToolTip="Bold"
+                                                Click="BoldButton_Click">
+                                            <TextBlock Text="B"
+                                                       FontFamily="Segoe UI"
+                                                       FontWeight="Bold"
+                                                       FontSize="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                ToolTip="Italic"
+                                                Click="ItalicButton_Click">
+                                            <TextBlock Text="I"
+                                                       FontFamily="Segoe UI"
+                                                       FontStyle="Italic"
+                                                       FontSize="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                ToolTip="Underline"
+                                                Click="UnderlineButton_Click">
+                                            <TextBlock Text="U"
+                                                       FontFamily="Segoe UI"
+                                                       TextDecorations="Underline"
+                                                       FontSize="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                ToolTip="Strikethrough"
+                                                Click="StrikethroughButton_Click">
+                                            <TextBlock Text="S"
+                                                       FontFamily="Segoe UI"
+                                                       TextDecorations="Strikethrough"
+                                                       FontSize="13" />
+                                        </Button>
+                                    </StackPanel>
+                                    <Separator Margin="0,8,0,8" />
+                                    <Button Style="{StaticResource RoundIconButtonStyle}"
+                                            ToolTip="Open Resource in New Window"
+                                            Click="PopOutResourceButton_Click">
+                                        <TextBlock Text="&#xE740;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="15" />
+                                    </Button>
+                                    <Button Style="{StaticResource RoundIconButtonStyle}"
+                                            Margin="0,8,0,0"
                                             ToolTip="Save Resource"
                                             Command="{Binding SaveSelectedResourceCommand}">
                                         <TextBlock Text="&#xE74E;"
                                                    FontFamily="Segoe MDL2 Assets"
                                                    FontSize="15" />
                                     </Button>
-                                </DockPanel>
+                                </StackPanel>
                             </Border>
-
-                            <ContentControl Grid.Row="1" Content="{Binding SelectedResource}">
-                                <ContentControl.Style>
-                                    <Style TargetType="{x:Type ContentControl}">
-                                        <Setter Property="ContentTemplate" Value="{StaticResource TextResourceTemplate}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.CodeSnippet}">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource CodeResourceTemplate}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Email}">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource EmailResourceTemplate}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Image}">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource ImageResourceTemplate}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.Audio}">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource AudioResourceTemplate}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SelectedResource.Kind}" Value="{x:Static models:ResourceKind.SurfResource}">
-                                                <Setter Property="ContentTemplate" Value="{StaticResource SurfResourceTemplate}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ContentControl.Style>
-                            </ContentControl>
                         </Grid>
                     </Border>
 
@@ -364,29 +417,42 @@
                                 BorderBrush="{StaticResource MutedBorderBrush}"
                                 BorderThickness="1"
                                 Background="#FFFFFF">
-                            <TreeView x:Name="ResourceTree"
-                                      ItemsSource="{Binding ResourceGroups}"
-                                      SelectedItemChanged="ResourceTree_SelectedItemChanged"
-                                      PreviewMouseMove="ResourceTree_PreviewMouseMove"
-                                      PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
-                                      ContextMenuOpening="ResourceTree_ContextMenuOpening"
-                                      BorderThickness="0">
-                                <TreeView.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem x:Name="RenameResourceMenuItem"
-                                                  Header="Rename"
-                                                  Click="RenameResourceMenuItem_Click" />
-                                    </ContextMenu>
-                                </TreeView.ContextMenu>
-                                <TreeView.Resources>
-                                    <HierarchicalDataTemplate DataType="{x:Type models:ResourceGroup}" ItemsSource="{Binding Resources}">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                    </HierarchicalDataTemplate>
-                                    <DataTemplate DataType="{x:Type models:ResourceItem}">
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </TreeView.Resources>
-                            </TreeView>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <TextBox Grid.Row="0"
+                                         Margin="8"
+                                         ToolTip="Filter resources"
+                                         Text="{Binding ResourceSearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <TreeView x:Name="ResourceTree"
+                                          Grid.Row="1"
+                                          ItemsSource="{Binding ResourceGroups}"
+                                          SelectedItemChanged="ResourceTree_SelectedItemChanged"
+                                          PreviewMouseMove="ResourceTree_PreviewMouseMove"
+                                          PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
+                                          ContextMenuOpening="ResourceTree_ContextMenuOpening"
+                                          BorderThickness="0">
+                                    <TreeView.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem x:Name="RenameResourceMenuItem"
+                                                      Header="Rename"
+                                                      Click="RenameResourceMenuItem_Click" />
+                                        </ContextMenu>
+                                    </TreeView.ContextMenu>
+                                    <TreeView.Resources>
+                                        <HierarchicalDataTemplate DataType="{x:Type models:ResourceGroup}" ItemsSource="{Binding Resources}">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        </HierarchicalDataTemplate>
+                                        <DataTemplate DataType="{x:Type models:ResourceItem}">
+                                            <TextBlock Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </TreeView.Resources>
+                                </TreeView>
+                            </Grid>
                         </Border>
                     </Grid>
 
@@ -399,6 +465,14 @@
                                 ToolTip="Text"
                                 Command="{Binding AddTextResourceCommand}">
                             <TextBlock Text="&#xE8A5;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="15" />
+                        </Button>
+                        <Button Style="{StaticResource RoundIconButtonStyle}"
+                                ToolTip="Sheet"
+                                Margin="0,8,0,0"
+                                Command="{Binding AddSheetResourceCommand}">
+                            <TextBlock Text="&#xE80A;"
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="15" />
                         </Button>

@@ -10,6 +10,20 @@ namespace TwoDoThree.Views;
 
 public partial class TaskDetailWindow : Window
 {
+    private static readonly string[] TextFontFamilies =
+    [
+        "Segoe UI",
+        "Calibri",
+        "Arial",
+        "Times New Roman",
+        "Georgia",
+        "Verdana",
+        "Consolas",
+        "Courier New"
+    ];
+
+    private static readonly double[] TextFontSizes = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
+
     private bool isResourceTreeVisible = true;
     private GridLength expandedResourcePaneWidth = new(292);
     private GridLength expandedResourceSectionHeight = new(3, GridUnitType.Star);
@@ -72,7 +86,101 @@ public partial class TaskDetailWindow : Window
         if (window.ShowDialog() == true)
         {
             resource.Name = window.ResourceName;
+            if (DataContext is TaskDetailViewModel viewModel)
+            {
+                viewModel.RefreshResourceGroups(resource);
+            }
         }
+    }
+
+    private void FontFamilyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu { PlacementTarget = button };
+        foreach (var fontFamily in TextFontFamilies)
+        {
+            var item = new MenuItem
+            {
+                Header = fontFamily,
+                FontFamily = new FontFamily(fontFamily)
+            };
+            item.Click += (_, _) => ApplyTextFormatting(editor => editor.SetSelectionFontFamily(fontFamily));
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void FontSizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu { PlacementTarget = button };
+        foreach (var fontSize in TextFontSizes)
+        {
+            var item = new MenuItem
+            {
+                Header = fontSize.ToString("0")
+            };
+            item.Click += (_, _) => ApplyTextFormatting(editor => editor.SetSelectionFontSize(fontSize));
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void BoldButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyTextFormatting(editor => editor.ToggleBold());
+    }
+
+    private void ItalicButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyTextFormatting(editor => editor.ToggleItalic());
+    }
+
+    private void UnderlineButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyTextFormatting(editor => editor.ToggleUnderline());
+    }
+
+    private void StrikethroughButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyTextFormatting(editor => editor.ToggleStrikethrough());
+    }
+
+    private void PopOutResourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not TaskDetailViewModel viewModel
+            || viewModel.SelectedResource is not { } resource)
+        {
+            return;
+        }
+
+        var window = new ResourcePopoutWindow(viewModel, resource)
+        {
+            Owner = this
+        };
+
+        window.Show();
+    }
+
+    private void ApplyTextFormatting(Action<ResourceLinkRichTextBox> action)
+    {
+        if (DataContext is not TaskDetailViewModel { SelectedResource.Kind: ResourceKind.Text }
+            || SelectedResourceViewer.GetTextEditor() is not { } editor)
+        {
+            return;
+        }
+
+        action(editor);
     }
 
     private void ToggleResourceTreeButton_Click(object sender, RoutedEventArgs e)

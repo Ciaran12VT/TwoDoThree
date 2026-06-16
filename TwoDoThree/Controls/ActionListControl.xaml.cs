@@ -122,17 +122,17 @@ public partial class ActionListControl : UserControl
     private void ActionTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.Modifiers != ModifierKeys.None
-            || sender is not TextBox textBox
-            || textBox.DataContext is not ActionItem action)
+            || sender is not ResourceLinkRichTextBox editor
+            || editor.DataContext is not ActionItem action)
         {
             return;
         }
 
-        if (e.Key == Key.Down && IsCaretOnLastLine(textBox))
+        if (e.Key == Key.Down && editor.IsCaretOnLastLine())
         {
             e.Handled = FocusRelativeActionTextBox(action, 1, moveToEnd: false);
         }
-        else if (e.Key == Key.Up && IsCaretOnFirstLine(textBox))
+        else if (e.Key == Key.Up && editor.IsCaretOnFirstLine())
         {
             e.Handled = FocusRelativeActionTextBox(action, -1, moveToEnd: true);
         }
@@ -187,27 +187,15 @@ public partial class ActionListControl : UserControl
                 return;
             }
 
-            var textBox = FindVisualChild<TextBox>(row);
-            if (textBox is null)
+            var editor = FindVisualChild<ResourceLinkRichTextBox>(row);
+            if (editor is null)
             {
                 row.Focus();
                 return;
             }
 
-            textBox.Focus();
-            textBox.CaretIndex = moveToEnd ? textBox.Text.Length : 0;
+            editor.FocusText(moveToEnd);
         }, DispatcherPriority.Background);
-    }
-
-    private static bool IsCaretOnFirstLine(TextBox textBox)
-    {
-        return textBox.GetLineIndexFromCharacterIndex(textBox.CaretIndex) == 0;
-    }
-
-    private static bool IsCaretOnLastLine(TextBox textBox)
-    {
-        var lineIndex = textBox.GetLineIndexFromCharacterIndex(textBox.CaretIndex);
-        return lineIndex >= Math.Max(0, textBox.LineCount - 1);
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject

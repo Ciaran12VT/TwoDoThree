@@ -14,6 +14,7 @@ public sealed class ResourceGroup
     public string Name => Kind switch
     {
         ResourceKind.Email => "Emails",
+        ResourceKind.Sheet => "Sheets",
         ResourceKind.CodeSnippet => "Code Snippets",
         ResourceKind.SurfResource => "Surf Resources",
         _ => $"{Kind}s"
