@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using TwoDoThree.Models;
 using TwoDoThree.ViewModels;
 using TwoDoThree.Views;
@@ -37,9 +38,17 @@ public partial class MainWindow : Window
 
     private void CreateTaskFromEmailMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: EmailMessage email })
+        if (ViewModel.SelectedEmail is EmailMessage email)
         {
             OpenTaskDetail(ViewModel.CreateTaskFromEmail(email));
+        }
+    }
+
+    private void EmailListBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is { } item)
+        {
+            item.IsSelected = true;
         }
     }
 
@@ -60,5 +69,20 @@ public partial class MainWindow : Window
 
         window.ShowDialog();
         ViewModel.TasksView.Refresh();
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 }

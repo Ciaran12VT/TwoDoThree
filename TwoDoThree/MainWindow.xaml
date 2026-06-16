@@ -56,10 +56,18 @@
                         <ColumnDefinition Width="*" MinWidth="360" />
                     </Grid.ColumnDefinitions>
 
-                    <ListBox Grid.Column="0"
+                    <ListBox x:Name="EmailListBox"
+                             Grid.Column="0"
                              ItemsSource="{Binding EmailsView}"
                              SelectedItem="{Binding SelectedEmail}"
-                             BorderBrush="{StaticResource MutedBorderBrush}">
+                             BorderBrush="{StaticResource MutedBorderBrush}"
+                             PreviewMouseRightButtonDown="EmailListBox_PreviewMouseRightButtonDown">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Create task from email"
+                                          Click="CreateTaskFromEmailMenuItem_Click" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="4">
@@ -76,18 +84,6 @@
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="{x:Type ListBoxItem}">
-                                <Setter Property="ContextMenu">
-                                    <Setter.Value>
-                                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                            <MenuItem Header="Create task from email"
-                                                      Click="CreateTaskFromEmailMenuItem_Click" />
-                                        </ContextMenu>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
                     </ListBox>
 
                     <GridSplitter Grid.Column="1"
