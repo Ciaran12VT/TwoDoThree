@@ -47,6 +47,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         Drop += ResourceLinkRichTextBox_Drop;
         MouseDoubleClick += ResourceLinkRichTextBox_MouseDoubleClick;
         PreviewKeyDown += ResourceLinkRichTextBox_PreviewKeyDown;
+        LostKeyboardFocus += (_, _) => pendingPostResourceTypingStyleReset = null;
     }
 
     public string Text
@@ -233,6 +234,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
 
         TextPointer? restoredCaret = GetTextPointerAtCharOffset(caretOffset);
         CaretPosition = restoredCaret?.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
+        RestorePendingTypingStyleAtCaret(caretOffset);
     }
 
     private void ResourceLinkRichTextBox_PreviewDragOver(object sender, DragEventArgs e)
@@ -372,12 +374,28 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         try
         {
             reset.TypingStyle.ApplyTo(new TextRange(start, end));
+            reset.EndOffset = Math.Max(reset.EndOffset, caretOffset);
         }
         finally
         {
             isApplyingFormat = false;
-            pendingPostResourceTypingStyleReset = null;
         }
+    }
+
+    private void RestorePendingTypingStyleAtCaret(int caretOffset)
+    {
+        if (pendingPostResourceTypingStyleReset is not { } reset)
+        {
+            return;
+        }
+
+        if (caretOffset < reset.StartOffset || caretOffset > reset.EndOffset)
+        {
+            pendingPostResourceTypingStyleReset = null;
+            return;
+        }
+
+        reset.TypingStyle.ApplyTo(Selection);
     }
 
     private void ToggleTextDecoration(TextDecorationLocation location)
@@ -487,9 +505,23 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         return currentOffset;
     }
 
-    private sealed record PostResourceTypingStyleReset(
-        int StartOffset,
-        TypingStyleSnapshot TypingStyle);
+    private sealed class PostResourceTypingStyleReset
+    {
+        public PostResourceTypingStyleReset(
+            int startOffset,
+            TypingStyleSnapshot typingStyle)
+        {
+            StartOffset = startOffset;
+            EndOffset = startOffset;
+            TypingStyle = typingStyle;
+        }
+
+        public int StartOffset { get; }
+
+        public int EndOffset { get; set; }
+
+        public TypingStyleSnapshot TypingStyle { get; }
+    }
 
     private sealed class TypingStyleSnapshot
     {
