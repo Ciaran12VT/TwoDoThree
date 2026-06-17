@@ -52,7 +52,7 @@ public sealed class Surf2Launcher : ISurf2Launcher
         };
         string json = JsonSerializer.Serialize(request, JsonOptions);
 
-        if (await TrySendToExistingSurf2Async(request, TimeSpan.FromMilliseconds(900), cancellationToken))
+        if (await TrySendToExistingSurf2Async(request, TimeSpan.FromMilliseconds(350), cancellationToken))
         {
             return;
         }
@@ -93,8 +93,23 @@ public sealed class Surf2Launcher : ISurf2Launcher
         TimeSpan connectTimeout,
         CancellationToken cancellationToken)
     {
-        string pipeName = CreateSurf2PipeName(request.ConnectionString);
+        foreach (string pipeName in CreateSurf2OpenRequestPipeCandidates(request))
+        {
+            if (await TrySendToPipeAsync(request, pipeName, connectTimeout, cancellationToken))
+            {
+                return true;
+            }
+        }
 
+        return false;
+    }
+
+    private static async Task<bool> TrySendToPipeAsync(
+        Surf2ExternalOpenRequest request,
+        string pipeName,
+        TimeSpan connectTimeout,
+        CancellationToken cancellationToken)
+    {
         await using var pipe = new NamedPipeClientStream(
             ".",
             pipeName,
@@ -122,6 +137,21 @@ public sealed class Surf2Launcher : ISurf2Launcher
         }
     }
 
+    private static IEnumerable<string> CreateSurf2OpenRequestPipeCandidates(Surf2ExternalOpenRequest request)
+    {
+        string? activeScopePipeName = CreateSurf2ActiveScopePipeName(
+            request.ConnectionString,
+            request.ScopeId,
+            request.ScopeName);
+        if (!string.IsNullOrWhiteSpace(activeScopePipeName))
+        {
+            yield return activeScopePipeName;
+        }
+
+        yield return CreateSurf2DatabasePipeName(request.ConnectionString);
+        yield return "Surf2.ExternalOpen.Any";
+    }
+
     private static int ToTimeoutMilliseconds(TimeSpan timeout)
     {
         if (timeout <= TimeSpan.Zero)
@@ -134,7 +164,7 @@ public sealed class Surf2Launcher : ISurf2Launcher
             : Math.Max(1, (int)Math.Ceiling(timeout.TotalMilliseconds));
     }
 
-    private static string CreateSurf2PipeName(string connectionString)
+    private static string CreateSurf2DatabasePipeName(string connectionString)
     {
         string normalizedConnectionString;
         try
@@ -148,6 +178,25 @@ public sealed class Surf2Launcher : ISurf2Launcher
 
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedConnectionString));
         return $"Surf2.ExternalOpen.{Convert.ToHexString(hash)[..16]}";
+    }
+
+    private static string? CreateSurf2ActiveScopePipeName(
+        string connectionString,
+        string scopeId,
+        string scopeName)
+    {
+        string scopeKey = !string.IsNullOrWhiteSpace(scopeId)
+            ? scopeId.Trim()
+            : scopeName.Trim();
+        if (string.IsNullOrWhiteSpace(scopeKey))
+        {
+            return null;
+        }
+
+        string databasePipeName = CreateSurf2DatabasePipeName(connectionString);
+        string key = $"{databasePipeName}|{scopeKey.ToUpperInvariant()}";
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        return $"Surf2.ExternalOpen.Scope.{Convert.ToHexString(hash)[..16]}";
     }
 
     private static string NormalizeSurf2ConnectionString(string connectionString)

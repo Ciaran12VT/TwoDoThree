@@ -6,12 +6,14 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using TwoDoThree.Models;
 
 namespace TwoDoThree.Controls;
 
 public sealed class SurfResourceIntellisensePopup
 {
+    private readonly FrameworkElement placementTarget;
     private readonly Popup popup;
     private readonly TextBox searchBox;
     private readonly ListBox resourceList;
@@ -23,6 +25,7 @@ public sealed class SurfResourceIntellisensePopup
         IReadOnlyList<Surf2ResourceCandidate> resources,
         Action<Surf2ResourceCandidate> commit)
     {
+        this.placementTarget = placementTarget;
         this.commit = commit;
         searchBox = new TextBox
         {
@@ -64,10 +67,12 @@ public sealed class SurfResourceIntellisensePopup
             Child = border
         };
 
+        placementTarget.PreviewKeyDown += PlacementTarget_PreviewKeyDown;
         searchBox.TextChanged += (_, _) => Refresh();
-        searchBox.KeyDown += SearchBox_KeyDown;
-        resourceList.KeyDown += ResourceList_KeyDown;
+        searchBox.PreviewKeyDown += SearchBox_PreviewKeyDown;
+        resourceList.PreviewKeyDown += ResourceList_PreviewKeyDown;
         resourceList.MouseDoubleClick += (_, _) => CommitSelection();
+        popup.Closed += Popup_Closed;
     }
 
     public static void Open(
@@ -88,7 +93,13 @@ public sealed class SurfResourceIntellisensePopup
     {
         popup.IsOpen = true;
         Refresh();
-        searchBox.Focus();
+        searchBox.Dispatcher.BeginInvoke(
+            () =>
+            {
+                searchBox.Focus();
+                Keyboard.Focus(searchBox);
+            },
+            DispatcherPriority.Input);
     }
 
     private void Refresh()
@@ -109,29 +120,19 @@ public sealed class SurfResourceIntellisensePopup
                resource.SearchText.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
-    private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+    private void PlacementTarget_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Down)
-        {
-            MoveSelection(1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Up)
-        {
-            MoveSelection(-1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.PageDown)
-        {
-            MoveSelection(6);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.PageUp)
-        {
-            MoveSelection(-6);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter)
+        HandleNavigationKey(e, focusListAfterMove: true);
+    }
+
+    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        HandleNavigationKey(e, focusListAfterMove: true);
+    }
+
+    private void ResourceList_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
         {
             CommitSelection();
             e.Handled = true;
@@ -143,9 +144,59 @@ public sealed class SurfResourceIntellisensePopup
         }
     }
 
-    private void ResourceList_KeyDown(object sender, KeyEventArgs e)
+    private void Popup_Closed(object? sender, EventArgs e)
     {
-        if (e.Key == Key.Enter)
+        placementTarget.PreviewKeyDown -= PlacementTarget_PreviewKeyDown;
+    }
+
+    private void HandleNavigationKey(KeyEventArgs e, bool focusListAfterMove)
+    {
+        if (!popup.IsOpen)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Down)
+        {
+            MoveSelection(1);
+            if (focusListAfterMove)
+            {
+                FocusSelectedListItem();
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Up)
+        {
+            MoveSelection(-1);
+            if (focusListAfterMove)
+            {
+                FocusSelectedListItem();
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageDown)
+        {
+            MoveSelection(6);
+            if (focusListAfterMove)
+            {
+                FocusSelectedListItem();
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.PageUp)
+        {
+            MoveSelection(-6);
+            if (focusListAfterMove)
+            {
+                FocusSelectedListItem();
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
         {
             CommitSelection();
             e.Handled = true;
@@ -169,6 +220,21 @@ public sealed class SurfResourceIntellisensePopup
         int nextIndex = Math.Clamp(currentIndex + delta, 0, resourceList.Items.Count - 1);
         resourceList.SelectedIndex = nextIndex;
         resourceList.ScrollIntoView(resourceList.SelectedItem);
+    }
+
+    private void FocusSelectedListItem()
+    {
+        if (resourceList.SelectedItem is null)
+        {
+            return;
+        }
+
+        resourceList.Focus();
+        resourceList.UpdateLayout();
+        if (resourceList.ItemContainerGenerator.ContainerFromItem(resourceList.SelectedItem) is ListBoxItem item)
+        {
+            item.Focus();
+        }
     }
 
     private void CommitSelection()
