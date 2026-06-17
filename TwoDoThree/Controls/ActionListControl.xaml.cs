@@ -64,6 +64,9 @@ public partial class ActionListControl : UserControl
             AddMenuItem(menu, $"Set status: {FormatStatus(status)}", () => viewModel.SetActionStatus(action, status));
         }
 
+        menu.Items.Add(new Separator());
+        AddMenuItem(menu, "Delete", () => viewModel.DeleteAction(action));
+
         menu.PlacementTarget = button;
         menu.IsOpen = true;
     }

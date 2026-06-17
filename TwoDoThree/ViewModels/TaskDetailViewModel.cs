@@ -539,7 +539,7 @@ public sealed class TaskDetailViewModel : ObservableObject
     {
         return new ActionItem
         {
-            ActionText = "New action",
+            ActionText = string.Empty,
             IndentLevel = indentLevel,
             Status = ActionStatus.NotStarted
         };
