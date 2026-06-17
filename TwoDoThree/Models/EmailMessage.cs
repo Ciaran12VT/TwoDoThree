@@ -10,6 +10,10 @@ public sealed class EmailMessage : ObservableObject
 
     public string From { get; init; } = string.Empty;
 
+    public string To { get; init; } = string.Empty;
+
+    public string Cc { get; init; } = string.Empty;
+
     public string Subject { get; init; } = string.Empty;
 
     public DateTime ReceivedOn { get; init; }
@@ -17,6 +21,10 @@ public sealed class EmailMessage : ObservableObject
     public string Preview { get; init; } = string.Empty;
 
     public string Body { get; init; } = string.Empty;
+
+    public string HtmlBody { get; init; } = string.Empty;
+
+    public bool HasHtmlBody => !string.IsNullOrWhiteSpace(HtmlBody);
 
     public string DisplayTitle => $"{From} - {Subject}";
 

@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -39,6 +40,9 @@ public partial class MainWindow : Window
     private readonly IGraphAuthService graphAuthService;
     private readonly ISurf2IntegrationService surf2IntegrationService;
     private readonly ISurf2Launcher surf2Launcher;
+    private GridLength expandedEmailSectionHeight = new(1, GridUnitType.Star);
+    private GridLength expandedTasksSectionHeight = new(2, GridUnitType.Star);
+    private bool wereBothMainSectionsExpanded = true;
 
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
@@ -64,6 +68,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateMainSectionRows();
         ApplyTaskGridColumnVisibility();
         await ViewModel.InitializeEmailAsync(this);
     }
@@ -503,10 +508,75 @@ public partial class MainWindow : Window
         UpdateSectionHeaderWidths();
     }
 
+    private void SectionExpander_ExpandedOrCollapsed(object sender, RoutedEventArgs e)
+    {
+        UpdateMainSectionRows();
+    }
+
+    private void MainSectionsGridSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        RememberExpandedMainSectionHeights();
+    }
+
     private void UpdateSectionHeaderWidths()
     {
         EmailHeaderPanel.Width = Math.Max(0, EmailExpander.ActualWidth - ExpanderGlyphWidth);
         TasksHeaderPanel.Width = Math.Max(0, TasksExpander.ActualWidth - ExpanderGlyphWidth);
+    }
+
+    private void UpdateMainSectionRows()
+    {
+        if (EmailSectionRow is null
+            || MainSectionSplitterRow is null
+            || TasksSectionRow is null
+            || MainSectionsGridSplitter is null)
+        {
+            return;
+        }
+
+        var isEmailExpanded = EmailExpander.IsExpanded;
+        var isTasksExpanded = TasksExpander.IsExpanded;
+        if (wereBothMainSectionsExpanded && (!isEmailExpanded || !isTasksExpanded))
+        {
+            RememberExpandedMainSectionHeights();
+        }
+
+        EmailSectionRow.MinHeight = isEmailExpanded ? 120 : 0;
+        TasksSectionRow.MinHeight = isTasksExpanded ? 120 : 0;
+
+        if (isEmailExpanded && isTasksExpanded)
+        {
+            EmailSectionRow.Height = expandedEmailSectionHeight;
+            TasksSectionRow.Height = expandedTasksSectionHeight;
+            MainSectionSplitterRow.Height = GridLength.Auto;
+            MainSectionsGridSplitter.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            EmailSectionRow.Height = isEmailExpanded
+                ? new GridLength(1, GridUnitType.Star)
+                : GridLength.Auto;
+            TasksSectionRow.Height = isTasksExpanded
+                ? new GridLength(1, GridUnitType.Star)
+                : GridLength.Auto;
+            MainSectionSplitterRow.Height = new GridLength(0);
+            MainSectionsGridSplitter.Visibility = Visibility.Collapsed;
+        }
+
+        wereBothMainSectionsExpanded = isEmailExpanded && isTasksExpanded;
+        UpdateSectionHeaderWidths();
+    }
+
+    private void RememberExpandedMainSectionHeights()
+    {
+        if (EmailSectionRow.ActualHeight <= 0
+            || TasksSectionRow.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        expandedEmailSectionHeight = new GridLength(EmailSectionRow.ActualHeight, GridUnitType.Star);
+        expandedTasksSectionHeight = new GridLength(TasksSectionRow.ActualHeight, GridUnitType.Star);
     }
 
     private void CopyTasksAsText()

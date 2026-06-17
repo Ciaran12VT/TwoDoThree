@@ -135,6 +135,16 @@ public sealed class TaskItem : ObservableObject
 
     public ObservableCollection<TaskActivity> Activities { get; } = new();
 
+    public string CurrentStatusMessage =>
+        Activities
+            .Where(activity => activity.ToStatus == Status
+                               && !string.IsNullOrWhiteSpace(activity.StatusMessage))
+            .OrderByDescending(activity => activity.OccurredOn)
+            .Select(activity => activity.StatusMessage.Trim())
+            .FirstOrDefault() ?? string.Empty;
+
+    public bool HasCurrentStatusMessage => !string.IsNullOrWhiteSpace(CurrentStatusMessage);
+
     public void SetStatus(TaskStatus newStatus, string statusMessage = "")
     {
         var previousStatus = status;
@@ -162,6 +172,8 @@ public sealed class TaskItem : ObservableObject
         statusBeforeActive = previousStatus;
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(StatusBeforeActive));
+        OnPropertyChanged(nameof(CurrentStatusMessage));
+        OnPropertyChanged(nameof(HasCurrentStatusMessage));
     }
 
     public void AddActivity(string activity)
@@ -183,6 +195,8 @@ public sealed class TaskItem : ObservableObject
             ToStatus = toStatus,
             StatusMessage = statusMessage.Trim()
         });
+        OnPropertyChanged(nameof(CurrentStatusMessage));
+        OnPropertyChanged(nameof(HasCurrentStatusMessage));
     }
 
     private static string FormatStatus(TaskStatus taskStatus)

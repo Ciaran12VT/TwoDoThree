@@ -111,14 +111,9 @@
                            Margin="0,2,0,10"
                            Text="{Binding EmailReceivedOn, StringFormat='Received: {0:g}'}"
                            Foreground="{StaticResource MutedTextBrush}" />
-                <TextBox Grid.Row="3"
-                         Text="{Binding Content}"
-                         IsReadOnly="True"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto"
-                         BorderThickness="0"
-                         Background="#FFFFFF" />
+                <controls:EmailBodyViewer Grid.Row="3"
+                                          HtmlBody="{Binding FormattedContent}"
+                                          PlainText="{Binding Content}" />
             </Grid>
         </DataTemplate>
 

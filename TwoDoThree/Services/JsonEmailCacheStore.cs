@@ -63,6 +63,10 @@ public sealed class JsonEmailCacheStore : IEmailCacheStore
 
         public string From { get; set; } = string.Empty;
 
+        public string To { get; set; } = string.Empty;
+
+        public string Cc { get; set; } = string.Empty;
+
         public string Subject { get; set; } = string.Empty;
 
         public DateTime ReceivedOn { get; set; }
@@ -71,16 +75,21 @@ public sealed class JsonEmailCacheStore : IEmailCacheStore
 
         public string Body { get; set; } = string.Empty;
 
+        public string HtmlBody { get; set; } = string.Empty;
+
         public static EmailMessageSnapshot FromEmail(EmailMessage message)
         {
             return new EmailMessageSnapshot
             {
                 Id = message.Id,
                 From = message.From,
+                To = message.To,
+                Cc = message.Cc,
                 Subject = message.Subject,
                 ReceivedOn = message.ReceivedOn,
                 Preview = message.Preview,
-                Body = message.Body
+                Body = message.Body,
+                HtmlBody = message.HtmlBody
             };
         }
 
@@ -90,10 +99,13 @@ public sealed class JsonEmailCacheStore : IEmailCacheStore
             {
                 Id = Id,
                 From = From,
+                To = To,
+                Cc = Cc,
                 Subject = Subject,
                 ReceivedOn = ReceivedOn,
                 Preview = Preview,
-                Body = Body
+                Body = Body,
+                HtmlBody = HtmlBody
             };
         }
     }

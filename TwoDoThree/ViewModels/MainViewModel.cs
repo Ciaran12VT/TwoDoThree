@@ -273,6 +273,7 @@ public sealed class MainViewModel : ObservableObject
     public TaskItem CreateTaskFromEmail(EmailMessage email)
     {
         var task = CreateTask(email.Subject, "email, outlook");
+        task.Pocs = CreatePocsFromEmail(email);
         AddEmailResourceCore(task, email);
         task.Actions.Add(new ActionItem { ActionText = "Review the email and define the next step" });
         TaskDetailViewModel.RenumberActions(task.Actions);
@@ -796,6 +797,7 @@ public sealed class MainViewModel : ObservableObject
             Name = string.IsNullOrWhiteSpace(email.Subject) ? "Email" : email.Subject,
             Kind = ResourceKind.Email,
             Content = email.Body,
+            FormattedContent = email.HtmlBody,
             EmailMessageId = email.Id,
             EmailFrom = email.From,
             EmailSubject = email.Subject,
@@ -804,6 +806,30 @@ public sealed class MainViewModel : ObservableObject
 
         task.Resources.Add(resource);
         return resource;
+    }
+
+    private static string CreatePocsFromEmail(EmailMessage email)
+    {
+        var participants = new List<string>();
+        AddEmailParticipants(participants, email.From);
+        AddEmailParticipants(participants, email.To);
+        AddEmailParticipants(participants, email.Cc);
+        return string.Join(", ", participants.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static void AddEmailParticipants(ICollection<string> participants, string participantLine)
+    {
+        if (string.IsNullOrWhiteSpace(participantLine))
+        {
+            return;
+        }
+
+        foreach (var participant in participantLine
+                     .Split([';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Where(participant => !string.IsNullOrWhiteSpace(participant)))
+        {
+            participants.Add(participant);
+        }
     }
 
     private bool FilterEmail(object item)

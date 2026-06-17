@@ -1,4 +1,5 @@
 using Microsoft.CSharp.RuntimeBinder;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using TwoDoThree.Models;
@@ -9,6 +10,9 @@ public sealed class ClassicOutlookEmailProvider : IEmailProvider
 {
     private const int OlFolderInbox = 6;
     private const int OlMailItemClass = 43;
+    private const string AttachContentIdProperty = "http://schemas.microsoft.com/mapi/proptag/0x3712001F";
+    private const string AttachMimeTagProperty = "http://schemas.microsoft.com/mapi/proptag/0x370E001F";
+    private const string AttachDataBinaryProperty = "http://schemas.microsoft.com/mapi/proptag/0x37010102";
 
     private readonly IEmailCacheStore cacheStore;
 
@@ -103,7 +107,10 @@ public sealed class ClassicOutlookEmailProvider : IEmailProvider
             }
 
             var body = AsString(item.Body);
+            var htmlBody = GetHtmlBody(item);
             var subject = AsString(item.Subject);
+            var to = AsString(item.To);
+            var cc = AsString(item.CC);
             var senderName = AsString(item.SenderName);
             var senderAddress = AsString(item.SenderEmailAddress);
             var from = string.IsNullOrWhiteSpace(senderName)
@@ -120,10 +127,13 @@ public sealed class ClassicOutlookEmailProvider : IEmailProvider
             {
                 Id = idOverride ?? $"classic-outlook:{entryId}",
                 From = from,
+                To = to,
+                Cc = cc,
                 Subject = string.IsNullOrWhiteSpace(subject) ? "(No subject)" : subject,
                 ReceivedOn = receivedOn,
                 Preview = TextPreview.Create(body),
-                Body = body
+                Body = body,
+                HtmlBody = EmbedInlineImages(htmlBody, item)
             };
 
             return true;
@@ -141,5 +151,124 @@ public sealed class ClassicOutlookEmailProvider : IEmailProvider
     private static string AsString(object? value)
     {
         return value?.ToString() ?? string.Empty;
+    }
+
+    private static string GetHtmlBody(dynamic item)
+    {
+        try
+        {
+            return AsString(item.HTMLBody);
+        }
+        catch (RuntimeBinderException)
+        {
+            return string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string EmbedInlineImages(string htmlBody, dynamic item)
+    {
+        if (string.IsNullOrWhiteSpace(htmlBody))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var images = new List<EmailInlineImage>();
+            dynamic attachments = item.Attachments;
+            var count = (int)attachments.Count;
+            for (var index = 1; index <= count; index++)
+            {
+                dynamic attachment = attachments[index];
+                var contentId = GetAttachmentPropertyString(attachment, AttachContentIdProperty);
+                if (string.IsNullOrWhiteSpace(contentId))
+                {
+                    continue;
+                }
+
+                var contentType = GetAttachmentPropertyString(attachment, AttachMimeTagProperty);
+                if (string.IsNullOrWhiteSpace(contentType))
+                {
+                    contentType = GuessContentType(AsString(attachment.FileName));
+                }
+
+                if (!contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var base64Content = GetAttachmentBase64(attachment);
+                if (!string.IsNullOrWhiteSpace(base64Content))
+                {
+                    images.Add(new EmailInlineImage(contentId, contentType, base64Content));
+                }
+            }
+
+            return EmailBodyHtml.EmbedInlineImages(htmlBody, images);
+        }
+        catch (RuntimeBinderException)
+        {
+            return htmlBody;
+        }
+        catch (COMException)
+        {
+            return htmlBody;
+        }
+    }
+
+    private static string GetAttachmentPropertyString(dynamic attachment, string propertyName)
+    {
+        try
+        {
+            return AsString(attachment.PropertyAccessor.GetProperty(propertyName));
+        }
+        catch (RuntimeBinderException)
+        {
+            return string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string GetAttachmentBase64(dynamic attachment)
+    {
+        try
+        {
+            var value = attachment.PropertyAccessor.GetProperty(AttachDataBinaryProperty);
+            return value switch
+            {
+                byte[] bytes => Convert.ToBase64String(bytes),
+                Array array => Convert.ToBase64String(array.Cast<byte>().ToArray()),
+                _ => string.Empty
+            };
+        }
+        catch (RuntimeBinderException)
+        {
+            return string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string GuessContentType(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
+            _ => "application/octet-stream"
+        };
     }
 }

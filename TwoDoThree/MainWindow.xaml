@@ -1,6 +1,7 @@
 <Window x:Class="TwoDoThree.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:TwoDoThree.Controls"
         xmlns:converters="clr-namespace:TwoDoThree.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:models="clr-namespace:TwoDoThree.Models"
@@ -193,15 +194,17 @@
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition x:Name="EmailSectionRow" Height="*" MinHeight="34" />
+            <RowDefinition x:Name="MainSectionSplitterRow" Height="Auto" />
+            <RowDefinition x:Name="TasksSectionRow" Height="2*" MinHeight="34" />
         </Grid.RowDefinitions>
 
         <Expander x:Name="EmailExpander"
                   Grid.Row="0"
                   IsExpanded="{Binding IsEmailSectionExpanded}"
                   SizeChanged="SectionExpander_SizeChanged"
-                  Margin="0,0,0,12">
+                  Expanded="SectionExpander_ExpandedOrCollapsed"
+                  Collapsed="SectionExpander_ExpandedOrCollapsed">
             <Expander.Header>
                 <Grid x:Name="EmailHeaderPanel">
                     <Grid.ColumnDefinitions>
@@ -273,7 +276,7 @@
                     BorderBrush="{StaticResource MutedBorderBrush}"
                     BorderThickness="1"
                     Padding="10">
-                <Grid Height="260">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="360" MinWidth="260" />
                         <ColumnDefinition Width="Auto" />
@@ -366,21 +369,31 @@
                                        Margin="0,2,0,8"
                                        Text="{Binding ReceivedOn, StringFormat='Received: {0:g}'}"
                                        Foreground="{StaticResource MutedTextBrush}" />
-                            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding Body}"
-                                           TextWrapping="Wrap"
-                                           LineHeight="20" />
-                            </ScrollViewer>
+                            <controls:EmailBodyViewer Grid.Row="3"
+                                                      HtmlBody="{Binding HtmlBody}"
+                                                      PlainText="{Binding Body}" />
                         </Grid>
                     </Border>
                 </Grid>
             </Border>
         </Expander>
 
+        <GridSplitter x:Name="MainSectionsGridSplitter"
+                      Grid.Row="1"
+                      Height="8"
+                      Margin="0,6"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Background="#D1D5DB"
+                      ShowsPreview="True"
+                      DragCompleted="MainSectionsGridSplitter_DragCompleted" />
+
         <Expander x:Name="TasksExpander"
-                  Grid.Row="1"
+                  Grid.Row="2"
                   IsExpanded="{Binding IsTaskSectionExpanded}"
-                  SizeChanged="SectionExpander_SizeChanged">
+                  SizeChanged="SectionExpander_SizeChanged"
+                  Expanded="SectionExpander_ExpandedOrCollapsed"
+                  Collapsed="SectionExpander_ExpandedOrCollapsed">
             <Expander.Header>
                 <Grid x:Name="TasksHeaderPanel">
                     <Grid.ColumnDefinitions>
@@ -628,7 +641,24 @@
                             <DataGridTextColumn x:Name="TaskTitleColumn" Header="Title" Width="2*" Binding="{Binding Title}" />
                             <DataGridTextColumn x:Name="TaskTagsColumn" Header="Tags" Width="*" Binding="{Binding Tags}" />
                             <DataGridTextColumn x:Name="TaskPocsColumn" Header="POCs" Width="*" Binding="{Binding Pocs}" />
-                            <DataGridTextColumn x:Name="TaskStatusColumn" Header="Status" Width="120" Binding="{Binding Status, Converter={StaticResource StatusDisplayConverter}}" />
+                            <DataGridTemplateColumn x:Name="TaskStatusColumn" Header="Status" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Status, Converter={StaticResource StatusDisplayConverter}}"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasCurrentStatusMessage}" Value="True">
+                                                            <Setter Property="ToolTip" Value="{Binding CurrentStatusMessage}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn x:Name="TaskDueByColumn" Header="Due By" Width="140" Binding="{Binding DueBy, StringFormat={}{0:g}}" />
                             <DataGridTextColumn x:Name="TaskCreatedOnColumn" Header="CreatedOn" Width="150" Binding="{Binding CreatedOn, StringFormat={}{0:g}}" />
                             <DataGridTextColumn x:Name="TaskUpdatedOnColumn" Header="UpdatedOn" Width="150" Binding="{Binding UpdatedOn, StringFormat={}{0:g}}" />

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using MimeKit;
 using TwoDoThree.Models;
 
 namespace TwoDoThree.Services;
@@ -35,25 +36,34 @@ public sealed class EmailImportService : IEmailImportService
         message = default!;
         try
         {
-            var raw = File.ReadAllText(filePath, Encoding.UTF8);
-            var (headers, body) = SplitHeadersAndBody(raw);
-            var normalizedHeaders = ParseHeaders(headers);
-            var subject = GetHeader(normalizedHeaders, "Subject");
-            var from = GetHeader(normalizedHeaders, "From");
-            var dateText = GetHeader(normalizedHeaders, "Date");
-            var receivedOn = DateTime.TryParse(dateText, out var parsedDate)
-                ? parsedDate
-                : File.GetLastWriteTime(filePath);
-            var cleanBody = CleanBody(body);
+            var mimeMessage = MimeMessage.Load(filePath);
+            var htmlBody = mimeMessage.HtmlBody ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(htmlBody))
+            {
+                htmlBody = EmailBodyHtml.EmbedInlineImages(htmlBody, GetInlineImages(mimeMessage));
+            }
+
+            var plainBody = mimeMessage.TextBody;
+            if (string.IsNullOrWhiteSpace(plainBody))
+            {
+                plainBody = EmailBodyHtml.ToPlainText(htmlBody);
+            }
+
+            var receivedOn = mimeMessage.Date == DateTimeOffset.MinValue
+                ? File.GetLastWriteTime(filePath)
+                : mimeMessage.Date.LocalDateTime;
 
             message = new EmailMessage
             {
                 Id = $"manual-import:{EmailImportId.CreateForFile(filePath)}",
-                From = from,
-                Subject = string.IsNullOrWhiteSpace(subject) ? Path.GetFileNameWithoutExtension(filePath) : subject,
+                From = FormatAddresses(mimeMessage.From),
+                To = FormatAddresses(mimeMessage.To),
+                Cc = FormatAddresses(mimeMessage.Cc),
+                Subject = string.IsNullOrWhiteSpace(mimeMessage.Subject) ? Path.GetFileNameWithoutExtension(filePath) : mimeMessage.Subject,
                 ReceivedOn = receivedOn,
-                Preview = TextPreview.Create(cleanBody),
-                Body = cleanBody
+                Preview = TextPreview.Create(plainBody ?? string.Empty),
+                Body = plainBody ?? string.Empty,
+                HtmlBody = htmlBody
             };
 
             return true;
@@ -61,6 +71,49 @@ public sealed class EmailImportService : IEmailImportService
         catch (IOException)
         {
             return false;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static string FormatAddresses(InternetAddressList addresses)
+    {
+        return string.Join("; ", addresses.Select(address => address.ToString())
+            .Where(address => !string.IsNullOrWhiteSpace(address)));
+    }
+
+    private static IReadOnlyList<EmailInlineImage> GetInlineImages(MimeMessage message)
+    {
+        return message.BodyParts
+            .OfType<MimePart>()
+            .Where(part => !string.IsNullOrWhiteSpace(part.ContentId)
+                           && part.ContentType.MediaType.Equals("image", StringComparison.OrdinalIgnoreCase))
+            .Select(TryCreateInlineImage)
+            .OfType<EmailInlineImage>()
+            .ToList();
+    }
+
+    private static EmailInlineImage? TryCreateInlineImage(MimePart part)
+    {
+        try
+        {
+            if (part.Content is null || string.IsNullOrWhiteSpace(part.ContentId))
+            {
+                return null;
+            }
+
+            using var stream = new MemoryStream();
+            part.Content.DecodeTo(stream);
+            return new EmailInlineImage(
+                part.ContentId,
+                part.ContentType?.MimeType ?? "application/octet-stream",
+                Convert.ToBase64String(stream.ToArray()));
+        }
+        catch (IOException)
+        {
+            return null;
         }
     }
 
