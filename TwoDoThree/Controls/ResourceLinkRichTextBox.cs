@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -88,14 +89,14 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         string token = ResourceLinkHelper.CreateToken(resource);
         int insertionOffset = CaretCharacterIndex;
         Selection.Text = token;
-        int afterTokenOffset = insertionOffset + token.Length;
 
-        TextPointer? afterToken = GetTextPointerAtCharOffset(afterTokenOffset);
+        TextPointer? afterToken = GetTextPointerAtCharOffset(insertionOffset + token.Length);
         if (afterToken is not null)
         {
             CaretPosition = afterToken.GetInsertionPosition(LogicalDirection.Forward) ?? afterToken;
         }
 
+        int afterTokenOffset = GetCharOffset(CaretPosition);
         ApplyResourceLinkFormatting();
         pendingPostResourceTypingStyleReset = new PostResourceTypingStyleReset(afterTokenOffset, typingStyle);
         RestoreTypingStyleAfterResourceLink(typingStyle);
@@ -435,16 +436,20 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
 
         try
         {
-            foreach (var link in ResourceLinkHelper.GetResourceLinks(Text))
+            string documentText = BuildDocumentTextMap(out List<TextCharacterRange> characterRanges);
+            foreach (var link in ResourceLinkHelper.GetResourceLinks(documentText))
             {
-                var start = GetTextPointerAtCharOffset(link.Index);
-                var end = GetTextPointerAtCharOffset(link.Index + link.Length);
-                if (start is null || end is null)
+                int endIndex = link.Index + link.Length - 1;
+                if (link.Index < 0 ||
+                    endIndex < link.Index ||
+                    endIndex >= characterRanges.Count)
                 {
                     continue;
                 }
 
-                var linkRange = new TextRange(start, end);
+                var linkRange = new TextRange(
+                    characterRanges[link.Index].Start,
+                    characterRanges[endIndex].End);
                 linkRange.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
                 linkRange.ApplyPropertyValue(TextElement.ForegroundProperty, LinkBrush);
             }
@@ -453,6 +458,37 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         {
             isApplyingFormat = false;
         }
+    }
+
+    private string BuildDocumentTextMap(out List<TextCharacterRange> characterRanges)
+    {
+        var text = new StringBuilder();
+        characterRanges = [];
+
+        TextPointer? current = Document.ContentStart;
+        while (current is not null && current.CompareTo(Document.ContentEnd) < 0)
+        {
+            if (current.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
+            {
+                string runText = current.GetTextInRun(LogicalDirection.Forward);
+                for (int index = 0; index < runText.Length; index++)
+                {
+                    TextPointer? start = current.GetPositionAtOffset(index);
+                    TextPointer? end = current.GetPositionAtOffset(index + 1);
+                    if (start is null || end is null)
+                    {
+                        continue;
+                    }
+
+                    text.Append(runText[index]);
+                    characterRanges.Add(new TextCharacterRange(start, end));
+                }
+            }
+
+            current = current.GetNextContextPosition(LogicalDirection.Forward);
+        }
+
+        return text.ToString();
     }
 
     private TextPointer? GetTextPointerAtCharOffset(int charOffset)
@@ -522,6 +558,10 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
 
         public TypingStyleSnapshot TypingStyle { get; }
     }
+
+    private readonly record struct TextCharacterRange(
+        TextPointer Start,
+        TextPointer End);
 
     private sealed class TypingStyleSnapshot
     {
