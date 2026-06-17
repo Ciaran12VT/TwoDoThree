@@ -227,15 +227,15 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
             return;
         }
 
-        int caretOffset = CaretCharacterIndex;
+        TextPointer caretPosition = CaretPosition;
+        int caretOffset = GetCharOffset(caretPosition);
         UpdateBoundPlainText();
         ApplyResourceLinkFormatting();
         ApplyPendingPostResourceTypingStyleReset(caretOffset);
         UpdateBoundFormattedText();
 
-        TextPointer? restoredCaret = GetTextPointerAtCharOffset(caretOffset);
-        CaretPosition = restoredCaret?.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
-        RestorePendingTypingStyleAtCaret(caretOffset);
+        CaretPosition = caretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
+        RestorePendingTypingStyleAtCaret(GetCharOffset(CaretPosition));
     }
 
     private void ResourceLinkRichTextBox_PreviewDragOver(object sender, DragEventArgs e)
