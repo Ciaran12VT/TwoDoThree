@@ -8,6 +8,7 @@ public sealed class TaskItem : ObservableObject
     private int id;
     private string title = string.Empty;
     private string tags = string.Empty;
+    private string pocs = string.Empty;
     private TaskStatus status = TaskStatus.Inactive;
     private TaskStatus statusBeforeActive = TaskStatus.Inactive;
     private int sortOrder;
@@ -42,6 +43,18 @@ public sealed class TaskItem : ObservableObject
         set
         {
             if (SetProperty(ref tags, value))
+            {
+                UpdatedOn = DateTime.Now;
+            }
+        }
+    }
+
+    public string Pocs
+    {
+        get => pocs;
+        set
+        {
+            if (SetProperty(ref pocs, value))
             {
                 UpdatedOn = DateTime.Now;
             }

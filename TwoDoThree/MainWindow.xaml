@@ -400,6 +400,18 @@
                                  ToolTip="Filter tasks"
                                  PreviewMouseDown="HeaderFilterTextBox_PreviewMouseDown"
                                  Text="{Binding TaskSearchText, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox x:Name="TaskFilterSetComboBox"
+                                  Width="180"
+                                  Height="24"
+                                  MinHeight="24"
+                                  Margin="8,0,0,0"
+                                  Padding="4,0"
+                                  VerticalContentAlignment="Center"
+                                  ToolTip="Saved task filter"
+                                  ItemsSource="{Binding FilterSetChoices}"
+                                  SelectedItem="{Binding SelectedFilterSet, Mode=TwoWay}"
+                                  DisplayMemberPath="Name"
+                                  SelectionChanged="TaskFilterSetComboBox_SelectionChanged" />
                         <TextBlock Text="{Binding TaskPersistenceStatus}"
                                    Margin="12,0,0,0"
                                    Foreground="{StaticResource MutedTextBrush}"
@@ -492,6 +504,15 @@
                     <DockPanel Margin="0,0,0,8" LastChildFill="False">
                         <StackPanel DockPanel.Dock="Right"
                                     Orientation="Horizontal">
+                            <Button x:Name="TaskFiltersButton"
+                                    Style="{StaticResource RoundOptionsButtonStyle}"
+                                    ToolTip="Filters"
+                                    Margin="0,2,6,2"
+                                    Click="TaskFiltersButton_Click">
+                                <TextBlock Text="&#xE71C;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="13" />
+                            </Button>
                             <Button x:Name="TasksListOptionsButton"
                                     Style="{StaticResource RoundOptionsButtonStyle}"
                                     ToolTip="Task List Options"
@@ -603,13 +624,15 @@
                             </Style>
                         </DataGrid.CellStyle>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="ID" Width="70" Binding="{Binding Id}" />
-                            <DataGridTextColumn Header="Title" Width="2*" Binding="{Binding Title}" />
-                            <DataGridTextColumn Header="Tags" Width="*" Binding="{Binding Tags}" />
-                            <DataGridTextColumn Header="Status" Width="120" Binding="{Binding Status, Converter={StaticResource StatusDisplayConverter}}" />
-                            <DataGridTextColumn Header="CreatedOn" Width="150" Binding="{Binding CreatedOn, StringFormat={}{0:g}}" />
-                            <DataGridTextColumn Header="UpdatedOn" Width="150" Binding="{Binding UpdatedOn, StringFormat={}{0:g}}" />
-                            <DataGridTextColumn Header="Time Spent" Width="120" Binding="{Binding TimeSpent}" />
+                            <DataGridTextColumn x:Name="TaskIdColumn" Header="ID" Width="70" Binding="{Binding Id}" />
+                            <DataGridTextColumn x:Name="TaskTitleColumn" Header="Title" Width="2*" Binding="{Binding Title}" />
+                            <DataGridTextColumn x:Name="TaskTagsColumn" Header="Tags" Width="*" Binding="{Binding Tags}" />
+                            <DataGridTextColumn x:Name="TaskPocsColumn" Header="POCs" Width="*" Binding="{Binding Pocs}" />
+                            <DataGridTextColumn x:Name="TaskStatusColumn" Header="Status" Width="120" Binding="{Binding Status, Converter={StaticResource StatusDisplayConverter}}" />
+                            <DataGridTextColumn x:Name="TaskDueByColumn" Header="Due By" Width="140" Binding="{Binding DueBy, StringFormat={}{0:g}}" />
+                            <DataGridTextColumn x:Name="TaskCreatedOnColumn" Header="CreatedOn" Width="150" Binding="{Binding CreatedOn, StringFormat={}{0:g}}" />
+                            <DataGridTextColumn x:Name="TaskUpdatedOnColumn" Header="UpdatedOn" Width="150" Binding="{Binding UpdatedOn, StringFormat={}{0:g}}" />
+                            <DataGridTextColumn x:Name="TaskTimeSpentColumn" Header="Time Spent" Width="120" Binding="{Binding TimeSpent}" />
                         </DataGrid.Columns>
                     </DataGrid>
                     </Grid>

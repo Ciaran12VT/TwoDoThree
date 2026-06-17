@@ -9,4 +9,6 @@ public sealed class AppSettings
     public DatabaseSettings Database { get; } = new();
 
     public Surf2IntegrationSettings Surf2 { get; } = new();
+
+    public TaskListSettings TaskList { get; } = new();
 }

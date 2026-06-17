@@ -1,0 +1,221 @@
+<Window x:Class="TwoDoThree.Views.TaskFilterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Task Filters"
+        Icon="../Assets/AppIcon.ico"
+        Height="650"
+        Width="560"
+        MinHeight="560"
+        MinWidth="500"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Filter Set"
+                   FontWeight="SemiBold"
+                   FontSize="16"
+                   Margin="0,0,0,12" />
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto">
+            <Grid Margin="0,0,8,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="Name"
+                           VerticalAlignment="Center" />
+                <TextBox x:Name="FilterNameTextBox"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Text="{Binding FilterSet.Name, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="1"
+                           Text="ID contains"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding FilterSet.IdContains, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="2"
+                           Text="Title contains"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding FilterSet.TitleContains, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="3"
+                           Text="Tags contain"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="3"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding FilterSet.TagsContains, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="4"
+                           Text="POCs contain"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="4"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding FilterSet.PocsContains, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="5"
+                           Text="Surf scope contains"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="5"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding FilterSet.SurfScopeContains, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="6"
+                           Text="Statuses"
+                           Margin="0,14,0,0"
+                           VerticalAlignment="Top" />
+                <WrapPanel Grid.Row="6"
+                           Grid.Column="1"
+                           Grid.ColumnSpan="4"
+                           Margin="0,10,0,0">
+                    <CheckBox x:Name="InactiveStatusCheckBox" Content="Inactive" Margin="0,0,14,8" />
+                    <CheckBox x:Name="ActiveStatusCheckBox" Content="Active" Margin="0,0,14,8" />
+                    <CheckBox x:Name="InProgressStatusCheckBox" Content="In-Progress" Margin="0,0,14,8" />
+                    <CheckBox x:Name="OnHoldStatusCheckBox" Content="On Hold" Margin="0,0,14,8" />
+                    <CheckBox x:Name="BlockedStatusCheckBox" Content="Blocked" Margin="0,0,14,8" />
+                    <CheckBox x:Name="CompleteStatusCheckBox" Content="Complete" Margin="0,0,14,8" />
+                    <CheckBox x:Name="CancelledStatusCheckBox" Content="Cancelled" Margin="0,0,14,8" />
+                </WrapPanel>
+
+                <TextBlock Grid.Row="7"
+                           Text="Due by from"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="7"
+                            Grid.Column="1"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.DueByFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="7"
+                           Grid.Column="3"
+                           Text="Due by to"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="7"
+                            Grid.Column="4"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.DueByTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="8"
+                           Text="Created from"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="8"
+                            Grid.Column="1"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.CreatedOnFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="8"
+                           Grid.Column="3"
+                           Text="Created to"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="8"
+                            Grid.Column="4"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.CreatedOnTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="9"
+                           Text="Updated from"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="9"
+                            Grid.Column="1"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.UpdatedOnFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="9"
+                           Grid.Column="3"
+                           Text="Updated to"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <DatePicker Grid.Row="9"
+                            Grid.Column="4"
+                            Margin="0,10,0,0"
+                            SelectedDate="{Binding FilterSet.UpdatedOnTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="10"
+                           Text="Min hours"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox x:Name="MinTimeSpentTextBox"
+                         Grid.Row="10"
+                         Grid.Column="1"
+                         Margin="0,10,0,0"
+                         Text="{Binding MinTimeSpentHoursText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="10"
+                           Grid.Column="3"
+                           Text="Max hours"
+                           Margin="0,10,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox x:Name="MaxTimeSpentTextBox"
+                         Grid.Row="10"
+                         Grid.Column="4"
+                         Margin="0,10,0,0"
+                         Text="{Binding MaxTimeSpentHoursText, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="11"
+                           Grid.Column="1"
+                           Grid.ColumnSpan="4"
+                           Margin="0,12,0,0"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap"
+                           Text="Leave a field blank to ignore it. Leaving every status unchecked means all statuses are included." />
+            </Grid>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,14,0,0">
+            <Button Width="84"
+                    Content="Cancel"
+                    Click="CancelButton_Click" />
+            <Button Width="84"
+                    Margin="8,0,0,0"
+                    Content="Save"
+                    IsDefault="True"
+                    Click="SaveButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -30,9 +30,16 @@ public sealed class MainViewModel : ObservableObject
     private EmailMessage? taskEmailFilter;
     private EmailMessage? selectedEmail;
     private TaskItem? selectedTask;
+    private TaskFilterSet? selectedFilterSet;
     private TaskListViewMode taskListViewMode = TaskListViewMode.Grid;
     private bool isEmailSectionExpanded = true;
     private bool isTaskSectionExpanded = true;
+
+    private readonly TaskFilterSet noTaskFilterSet = new()
+    {
+        Id = string.Empty,
+        Name = "No saved filter"
+    };
 
     public MainViewModel(
         AppSettings settings,
@@ -50,6 +57,7 @@ public sealed class MainViewModel : ObservableObject
         TasksView = CollectionViewSource.GetDefaultView(Tasks);
         EmailsView.Filter = FilterEmail;
         TasksView.Filter = FilterTask;
+        RefreshFilterSetChoices();
 
         taskPersistenceTimer = new DispatcherTimer
         {
@@ -84,6 +92,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<TaskBucketViewModel> TagTaskBuckets { get; } = new();
 
     public ObservableCollection<TaskBucketViewModel> StatusTaskBuckets { get; } = new();
+
+    public ObservableCollection<TaskFilterSet> FilterSetChoices { get; } = new();
 
     public ICollectionView EmailsView { get; }
 
@@ -125,6 +135,23 @@ public sealed class MainViewModel : ObservableObject
         get => selectedTask;
         set => SetProperty(ref selectedTask, value);
     }
+
+    public TaskFilterSet? SelectedFilterSet
+    {
+        get => selectedFilterSet;
+        set
+        {
+            if (SetProperty(ref selectedFilterSet, value))
+            {
+                Settings.TaskList.SelectedFilterSetId = value?.Id ?? string.Empty;
+                OnPropertyChanged(nameof(HasActiveTaskFilterSet));
+                TasksView.Refresh();
+                RefreshTaskBuckets();
+            }
+        }
+    }
+
+    public bool HasActiveTaskFilterSet => SelectedFilterSet is { Id.Length: > 0 };
 
     public TaskListViewMode TaskListViewMode
     {
@@ -279,6 +306,36 @@ public sealed class MainViewModel : ObservableObject
         SetTaskEmailFilter(null);
         TasksView.Refresh();
         SelectedTask = TasksView.Cast<TaskItem>().FirstOrDefault();
+    }
+
+    public void SaveFilterSet(TaskFilterSet filterSet)
+    {
+        var savedFilterSet = filterSet.Clone();
+        savedFilterSet.Name = savedFilterSet.Name.Trim();
+        savedFilterSet.Id = string.IsNullOrWhiteSpace(savedFilterSet.Id)
+            ? Guid.NewGuid().ToString("N")
+            : savedFilterSet.Id;
+
+        var existingFilterSet = Settings.TaskList.FilterSets.FirstOrDefault(existing =>
+                                    string.Equals(existing.Id, savedFilterSet.Id, StringComparison.OrdinalIgnoreCase))
+                                ?? Settings.TaskList.FilterSets.FirstOrDefault(existing =>
+                                    string.Equals(existing.Name, savedFilterSet.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (existingFilterSet is null)
+        {
+            Settings.TaskList.FilterSets.Add(savedFilterSet);
+        }
+        else
+        {
+            savedFilterSet.Id = existingFilterSet.Id;
+            existingFilterSet.CopyFrom(savedFilterSet);
+        }
+
+        Settings.TaskList.SelectedFilterSetId = savedFilterSet.Id;
+        RefreshFilterSetChoices();
+        OnPropertyChanged(nameof(HasActiveTaskFilterSet));
+        TasksView.Refresh();
+        RefreshTaskBuckets();
     }
 
     public void SetTaskStatus(TaskItem task, TaskItemStatus status, string statusMessage = "")
@@ -779,6 +836,11 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
+        if (GetActiveFilterSet() is { } filterSet && !TaskMatchesFilterSet(task, filterSet))
+        {
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(TaskSearchText))
         {
             return true;
@@ -787,7 +849,79 @@ public sealed class MainViewModel : ObservableObject
         return task.Id.ToString().Contains(TaskSearchText, StringComparison.OrdinalIgnoreCase)
                || Contains(task.Title, TaskSearchText)
                || Contains(task.Tags, TaskSearchText)
-               || Contains(task.Status.ToString(), TaskSearchText);
+               || Contains(task.Pocs, TaskSearchText)
+               || Contains(FormatStatus(task.Status), TaskSearchText)
+               || Contains(task.DueBy?.ToString("g") ?? string.Empty, TaskSearchText)
+               || Contains(task.CreatedOn.ToString("g"), TaskSearchText)
+               || Contains(task.UpdatedOn.ToString("g"), TaskSearchText)
+               || Contains(task.TimeSpent.ToString(), TaskSearchText)
+               || Contains(task.SurfScopeName, TaskSearchText);
+    }
+
+    private TaskFilterSet? GetActiveFilterSet()
+    {
+        return SelectedFilterSet is { Id.Length: > 0 } filterSet
+            ? filterSet
+            : null;
+    }
+
+    private static bool TaskMatchesFilterSet(TaskItem task, TaskFilterSet filterSet)
+    {
+        if (!MatchesText(task.Id.ToString(), filterSet.IdContains)
+            || !MatchesText(task.Title, filterSet.TitleContains)
+            || !MatchesText(task.Tags, filterSet.TagsContains)
+            || !MatchesText(task.Pocs, filterSet.PocsContains)
+            || !MatchesText(task.SurfScopeName, filterSet.SurfScopeContains))
+        {
+            return false;
+        }
+
+        if (filterSet.IncludedStatuses.Count > 0 && !filterSet.IncludedStatuses.Contains(task.Status))
+        {
+            return false;
+        }
+
+        if (!MatchesNullableDateRange(task.DueBy, filterSet.DueByFrom, filterSet.DueByTo)
+            || !MatchesDateRange(task.CreatedOn, filterSet.CreatedOnFrom, filterSet.CreatedOnTo)
+            || !MatchesDateRange(task.UpdatedOn, filterSet.UpdatedOnFrom, filterSet.UpdatedOnTo))
+        {
+            return false;
+        }
+
+        var timeSpentHours = task.TimeSpent.TotalHours;
+        return (!filterSet.MinTimeSpentHours.HasValue || timeSpentHours >= filterSet.MinTimeSpentHours.Value)
+               && (!filterSet.MaxTimeSpentHours.HasValue || timeSpentHours <= filterSet.MaxTimeSpentHours.Value);
+    }
+
+    private static bool MatchesText(string value, string filter)
+    {
+        return string.IsNullOrWhiteSpace(filter)
+               || Contains(value, filter.Trim());
+    }
+
+    private static bool MatchesNullableDateRange(DateTime? value, DateTime? from, DateTime? to)
+    {
+        if (!from.HasValue && !to.HasValue)
+        {
+            return true;
+        }
+
+        return value.HasValue && MatchesDateRange(value.Value, from, to);
+    }
+
+    private static bool MatchesDateRange(DateTime value, DateTime? from, DateTime? to)
+    {
+        if (from.HasValue && value < from.Value.Date)
+        {
+            return false;
+        }
+
+        if (to.HasValue && value > to.Value.Date.AddDays(1).AddTicks(-1))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private void RefreshTaskBuckets()
@@ -860,6 +994,24 @@ public sealed class MainViewModel : ObservableObject
         return value.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
+    public void RefreshFilterSetChoices()
+    {
+        FilterSetChoices.Clear();
+        FilterSetChoices.Add(noTaskFilterSet);
+        foreach (var filterSet in Settings.TaskList.FilterSets
+                     .OrderBy(filterSet => filterSet.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            FilterSetChoices.Add(filterSet);
+        }
+
+        var selected = FilterSetChoices.FirstOrDefault(filterSet =>
+                           !string.IsNullOrWhiteSpace(Settings.TaskList.SelectedFilterSetId)
+                           && string.Equals(filterSet.Id, Settings.TaskList.SelectedFilterSetId, StringComparison.OrdinalIgnoreCase))
+                       ?? noTaskFilterSet;
+
+        SelectedFilterSet = selected;
+    }
+
     private void Task_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not TaskItem task)
@@ -867,7 +1019,16 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        if (e.PropertyName is nameof(TaskItem.Title) or nameof(TaskItem.Tags) or nameof(TaskItem.SortOrder))
+        if (e.PropertyName is nameof(TaskItem.Title)
+            or nameof(TaskItem.Tags)
+            or nameof(TaskItem.Pocs)
+            or nameof(TaskItem.SortOrder)
+            or nameof(TaskItem.DueBy)
+            or nameof(TaskItem.CreatedOn)
+            or nameof(TaskItem.UpdatedOn)
+            or nameof(TaskItem.TimeSpent)
+            or nameof(TaskItem.SurfScopeId)
+            or nameof(TaskItem.SurfScopeName))
         {
             RefreshEmailTaskAssociations();
             TasksView.Refresh();

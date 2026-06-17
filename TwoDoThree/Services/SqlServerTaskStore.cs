@@ -113,6 +113,7 @@ BEGIN
         Id int NOT NULL CONSTRAINT PK_TwoDoThreeTasks PRIMARY KEY,
         Title nvarchar(500) NOT NULL,
         Tags nvarchar(max) NOT NULL,
+        Pocs nvarchar(max) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_Pocs DEFAULT(N''),
         Status nvarchar(32) NOT NULL,
         StatusBeforeActive nvarchar(32) NOT NULL,
         DueBy datetime2 NULL,
@@ -128,6 +129,11 @@ END;
 IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SortOrder') IS NULL
 BEGIN
     ALTER TABLE dbo.TwoDoThreeTasks ADD SortOrder int NOT NULL CONSTRAINT DF_TwoDoThreeTasks_SortOrder DEFAULT(0);
+END;
+
+IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'Pocs') IS NULL
+BEGIN
+    ALTER TABLE dbo.TwoDoThreeTasks ADD Pocs nvarchar(max) NOT NULL CONSTRAINT DF_TwoDoThreeTasks_Pocs DEFAULT(N'');
 END;
 
 IF COL_LENGTH(N'dbo.TwoDoThreeTasks', N'SurfScopeId') IS NULL
@@ -213,7 +219,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeTasks_SortO
     {
         using var command = connection.CreateCommand();
         command.CommandText = """
-SELECT Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName
+SELECT Id, Title, Tags, Pocs, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName
 FROM dbo.TwoDoThreeTasks
 ORDER BY SortOrder, Id;
 """;
@@ -229,6 +235,7 @@ ORDER BY SortOrder, Id;
                 Id = ReadInt(reader, "Id"),
                 Title = ReadString(reader, "Title"),
                 Tags = ReadString(reader, "Tags"),
+                Pocs = ReadString(reader, "Pocs"),
                 DueBy = ReadNullableDateTime(reader, "DueBy"),
                 SurfScopeId = ReadString(reader, "SurfScopeId"),
                 SurfScopeName = ReadString(reader, "SurfScopeName"),
@@ -348,6 +355,7 @@ WHEN MATCHED THEN
     UPDATE SET
         Title = @Title,
         Tags = @Tags,
+        Pocs = @Pocs,
         Status = @Status,
         StatusBeforeActive = @StatusBeforeActive,
         DueBy = @DueBy,
@@ -358,13 +366,14 @@ WHEN MATCHED THEN
         SurfScopeId = @SurfScopeId,
         SurfScopeName = @SurfScopeName
 WHEN NOT MATCHED THEN
-    INSERT (Id, Title, Tags, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName)
-    VALUES (@Id, @Title, @Tags, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds, @SortOrder, @SurfScopeId, @SurfScopeName);
+    INSERT (Id, Title, Tags, Pocs, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName)
+    VALUES (@Id, @Title, @Tags, @Pocs, @Status, @StatusBeforeActive, @DueBy, @CreatedOn, @UpdatedOn, @TimeSpentSeconds, @SortOrder, @SurfScopeId, @SurfScopeName);
 """);
 
         AddParameter(command, "@Id", task.Id);
         AddParameter(command, "@Title", task.Title);
         AddParameter(command, "@Tags", task.Tags);
+        AddParameter(command, "@Pocs", task.Pocs);
         AddParameter(command, "@Status", task.Status.ToString());
         AddParameter(command, "@StatusBeforeActive", task.StatusBeforeActive.ToString());
         AddParameter(command, "@DueBy", task.DueBy);

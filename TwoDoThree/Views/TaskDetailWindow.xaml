@@ -283,6 +283,16 @@
                             Margin="0,12,20,0"
                             SelectedDate="{Binding Task.DueBy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
+                <TextBlock Grid.Row="4"
+                           Text="POCs"
+                           Margin="0,12,0,0"
+                           VerticalAlignment="Center" />
+                <TextBox Grid.Row="4"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="5"
+                         Margin="0,12,0,0"
+                         Text="{Binding Task.Pocs, UpdateSourceTrigger=PropertyChanged}" />
+
             </Grid>
         </Border>
 

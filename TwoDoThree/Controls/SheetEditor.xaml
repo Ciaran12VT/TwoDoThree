@@ -65,6 +65,7 @@
                   GridLinesVisibility="All"
                   AutoGeneratingColumn="SheetGrid_AutoGeneratingColumn"
                   CurrentCellChanged="SheetGrid_CurrentCellChanged"
+                  PreviewKeyDown="SheetGrid_PreviewKeyDown"
                   RowEditEnding="SheetGrid_RowEditEnding" />
     </Grid>
 </UserControl>

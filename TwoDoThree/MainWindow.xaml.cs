@@ -20,6 +20,19 @@ public partial class MainWindow : Window
     private const string TaskDataFormat = "TwoDoThree.TaskItem";
     private const double ExpanderGlyphWidth = 24;
 
+    private static readonly IReadOnlyList<TaskListColumnOption> TaskListColumnOptions =
+    [
+        new(TaskListColumn.Id, "ID"),
+        new(TaskListColumn.Title, "Title"),
+        new(TaskListColumn.Tags, "Tags"),
+        new(TaskListColumn.Pocs, "POCs"),
+        new(TaskListColumn.Status, "Status"),
+        new(TaskListColumn.DueBy, "Due By"),
+        new(TaskListColumn.CreatedOn, "CreatedOn"),
+        new(TaskListColumn.UpdatedOn, "UpdatedOn"),
+        new(TaskListColumn.TimeSpent, "Time Spent")
+    ];
+
     private readonly List<TaskDetailWindow> openTaskDetailWindows = new();
     private readonly IAppSettingsStore settingsStore;
     private readonly IEmailCacheStore emailCacheStore;
@@ -51,6 +64,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplyTaskGridColumnVisibility();
         await ViewModel.InitializeEmailAsync(this);
     }
 
@@ -240,6 +254,31 @@ public partial class MainWindow : Window
         ViewModel.ClearTaskEmailFilter();
     }
 
+    private void TaskFilterSetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainViewModel)
+        {
+            settingsStore.Save(ViewModel.Settings);
+        }
+    }
+
+    private void TaskFiltersButton_Click(object sender, RoutedEventArgs e)
+    {
+        var currentFilterSet = ViewModel.SelectedFilterSet is { Id.Length: > 0 } filterSet
+            ? filterSet
+            : null;
+        var window = new TaskFilterWindow(currentFilterSet)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() == true)
+        {
+            ViewModel.SaveFilterSet(window.FilterSet);
+            settingsStore.Save(ViewModel.Settings);
+        }
+    }
+
     private void TasksListOptionsButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement button)
@@ -248,6 +287,8 @@ public partial class MainWindow : Window
         }
 
         var menu = new ContextMenu();
+        AddVisibleColumnsMenu(menu);
+        menu.Items.Add(new Separator());
         AddMenuItem(menu, "Copy as Text", CopyTasksAsText);
         AddMenuItem(menu, "Copy as CSV", CopyTasksAsCsv);
         AddMenuItem(menu, "Export to CSV", ExportTasksAsCsv);
@@ -494,6 +535,58 @@ public partial class MainWindow : Window
         }
 
         File.WriteAllText(dialog.FileName, CreateTasksCsv(GetVisibleTasks()), Encoding.UTF8);
+    }
+
+    private void AddVisibleColumnsMenu(ItemsControl menu)
+    {
+        var columnsMenu = new MenuItem { Header = "Visible Columns" };
+        foreach (var option in TaskListColumnOptions)
+        {
+            var item = new MenuItem
+            {
+                Header = option.Header,
+                IsCheckable = true,
+                IsChecked = ViewModel.Settings.TaskList.IsColumnVisible(option.Column),
+                StaysOpenOnClick = true
+            };
+
+            item.Click += (_, _) =>
+            {
+                ViewModel.Settings.TaskList.SetColumnVisible(option.Column, item.IsChecked);
+                ApplyTaskGridColumnVisibility();
+                settingsStore.Save(ViewModel.Settings);
+            };
+            columnsMenu.Items.Add(item);
+        }
+
+        menu.Items.Add(columnsMenu);
+    }
+
+    private void ApplyTaskGridColumnVisibility()
+    {
+        foreach (var option in TaskListColumnOptions)
+        {
+            GetTaskGridColumn(option.Column).Visibility = ViewModel.Settings.TaskList.IsColumnVisible(option.Column)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private DataGridColumn GetTaskGridColumn(TaskListColumn column)
+    {
+        return column switch
+        {
+            TaskListColumn.Id => TaskIdColumn,
+            TaskListColumn.Title => TaskTitleColumn,
+            TaskListColumn.Tags => TaskTagsColumn,
+            TaskListColumn.Pocs => TaskPocsColumn,
+            TaskListColumn.Status => TaskStatusColumn,
+            TaskListColumn.DueBy => TaskDueByColumn,
+            TaskListColumn.CreatedOn => TaskCreatedOnColumn,
+            TaskListColumn.UpdatedOn => TaskUpdatedOnColumn,
+            TaskListColumn.TimeSpent => TaskTimeSpentColumn,
+            _ => TaskTitleColumn
+        };
     }
 
     private void OpenTaskDetail(TaskItem task, bool activate)
@@ -818,14 +911,14 @@ public partial class MainWindow : Window
         return string.Join(
             Environment.NewLine,
             tasks.Select(task =>
-                $"{task.Id} - {task.Title} [{FormatStatus(task.Status)}] Tags: {task.Tags} Created: {task.CreatedOn:g} Updated: {task.UpdatedOn:g} Time Spent: {task.TimeSpent}"));
+                $"{task.Id} - {task.Title} [{FormatStatus(task.Status)}] Tags: {task.Tags} POCs: {task.Pocs} Due By: {FormatDate(task.DueBy)} Created: {task.CreatedOn:g} Updated: {task.UpdatedOn:g} Time Spent: {task.TimeSpent}"));
     }
 
     private static string CreateTasksCsv(IEnumerable<TaskItem> tasks)
     {
         var lines = new List<string>
         {
-            "ID,Title,Tags,Status,CreatedOn,UpdatedOn,TimeSpent"
+            "ID,Title,Tags,POCs,Status,DueBy,CreatedOn,UpdatedOn,TimeSpent"
         };
 
         lines.AddRange(tasks.Select(task => string.Join(
@@ -833,7 +926,9 @@ public partial class MainWindow : Window
             task.Id.ToString(),
             EscapeCsv(task.Title),
             EscapeCsv(task.Tags),
+            EscapeCsv(task.Pocs),
             EscapeCsv(FormatStatus(task.Status)),
+            EscapeCsv(FormatDate(task.DueBy)),
             EscapeCsv(task.CreatedOn.ToString("g")),
             EscapeCsv(task.UpdatedOn.ToString("g")),
             EscapeCsv(task.TimeSpent.ToString()))));
@@ -860,6 +955,11 @@ public partial class MainWindow : Window
         }
 
         Clipboard.SetText(text);
+    }
+
+    private static string FormatDate(DateTime? value)
+    {
+        return value?.ToString("g") ?? string.Empty;
     }
 
     private static void AddMenuItem(ItemsControl menu, string header, Action action)
@@ -893,4 +993,6 @@ public partial class MainWindow : Window
 
         return null;
     }
+
+    private sealed record TaskListColumnOption(TaskListColumn Column, string Header);
 }

@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Data;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using TwoDoThree.Models;
 
@@ -135,6 +137,23 @@ public partial class SheetEditor : UserControl
         Dispatcher.BeginInvoke(SyncResourceFromTable, DispatcherPriority.Background);
     }
 
+    private void SheetGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        if (e.Key == Key.C && TryCopySelectionToClipboard())
+        {
+            e.Handled = true;
+        }
+        else if (e.Key == Key.V && TryPasteClipboardIntoGrid())
+        {
+            e.Handled = true;
+        }
+    }
+
     private void SheetGrid_RowEditEnding(object sender, DataGridRowEditEndingEventArgs e)
     {
         Dispatcher.BeginInvoke(SyncResourceFromTable, DispatcherPriority.Background);
@@ -230,6 +249,313 @@ public partial class SheetEditor : UserControl
     {
         SheetGrid.ItemsSource = null;
         SheetGrid.ItemsSource = table.DefaultView;
+    }
+
+    private bool TryPasteClipboardIntoGrid()
+    {
+        if (!Clipboard.ContainsText())
+        {
+            return false;
+        }
+
+        var clipboardText = Clipboard.GetText(TextDataFormat.UnicodeText);
+        if (string.IsNullOrEmpty(clipboardText))
+        {
+            clipboardText = Clipboard.GetText();
+        }
+
+        var values = ParseClipboardGrid(clipboardText);
+        if (values.Count == 0)
+        {
+            return false;
+        }
+
+        SheetGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        SheetGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var startRow = GetPasteStartRowIndex();
+        var startColumn = GetPasteStartColumnIndex();
+        var requiredColumnCount = startColumn + values.Max(row => row.Count);
+        var requiredRowCount = startRow + values.Count;
+
+        DetachTableEvents();
+
+        try
+        {
+            while (table.Columns.Count < requiredColumnCount)
+            {
+                table.Columns.Add(GetNextColumnName(), typeof(string));
+            }
+
+            while (table.Rows.Count < requiredRowCount)
+            {
+                table.Rows.Add(table.NewRow());
+            }
+
+            for (var rowIndex = 0; rowIndex < values.Count; rowIndex++)
+            {
+                var sourceRow = values[rowIndex];
+                var targetRow = table.Rows[startRow + rowIndex];
+
+                for (var columnIndex = 0; columnIndex < sourceRow.Count; columnIndex++)
+                {
+                    targetRow[startColumn + columnIndex] = sourceRow[columnIndex];
+                }
+            }
+        }
+        finally
+        {
+            AttachTableEvents();
+        }
+
+        RefreshGridColumns();
+        SyncResourceFromTable();
+        SelectPastedCell(startRow, startColumn);
+        return true;
+    }
+
+    private bool TryCopySelectionToClipboard()
+    {
+        var selectedCells = GetSelectedGridCells();
+        if (selectedCells.Count == 0)
+        {
+            return false;
+        }
+
+        var minRowIndex = selectedCells.Min(cell => cell.RowIndex);
+        var maxRowIndex = selectedCells.Max(cell => cell.RowIndex);
+        var minColumnIndex = selectedCells.Min(cell => cell.ColumnIndex);
+        var maxColumnIndex = selectedCells.Max(cell => cell.ColumnIndex);
+
+        var tabDelimitedText = CreateDelimitedSelectionText(minRowIndex, maxRowIndex, minColumnIndex, maxColumnIndex, '\t');
+        var csvText = CreateDelimitedSelectionText(minRowIndex, maxRowIndex, minColumnIndex, maxColumnIndex, ',');
+        var dataObject = new DataObject();
+        dataObject.SetText(tabDelimitedText, TextDataFormat.UnicodeText);
+        dataObject.SetText(tabDelimitedText, TextDataFormat.Text);
+        dataObject.SetData(DataFormats.CommaSeparatedValue, csvText);
+        Clipboard.SetDataObject(dataObject, true);
+        return true;
+    }
+
+    private List<(int RowIndex, int ColumnIndex)> GetSelectedGridCells()
+    {
+        var selectedCells = SheetGrid.SelectedCells
+            .Select(TryGetGridCellCoordinates)
+            .Where(cell => cell.HasValue)
+            .Select(cell => cell!.Value)
+            .Distinct()
+            .ToList();
+
+        if (selectedCells.Count > 0)
+        {
+            return selectedCells;
+        }
+
+        var currentCell = TryGetGridCellCoordinates(SheetGrid.CurrentCell);
+        return currentCell.HasValue
+            ? new List<(int RowIndex, int ColumnIndex)> { currentCell.Value }
+            : new List<(int RowIndex, int ColumnIndex)>();
+    }
+
+    private (int RowIndex, int ColumnIndex)? TryGetGridCellCoordinates(DataGridCellInfo cell)
+    {
+        if (cell.Item is not DataRowView rowView)
+        {
+            return null;
+        }
+
+        var rowIndex = table.Rows.IndexOf(rowView.Row);
+        var columnName = cell.Column?.SortMemberPath;
+        if (rowIndex < 0 || string.IsNullOrWhiteSpace(columnName) || !table.Columns.Contains(columnName))
+        {
+            return null;
+        }
+
+        var columnIndex = table.Columns.IndexOf(columnName);
+        return columnIndex >= 0
+            ? (rowIndex, columnIndex)
+            : null;
+    }
+
+    private string CreateDelimitedSelectionText(
+        int minRowIndex,
+        int maxRowIndex,
+        int minColumnIndex,
+        int maxColumnIndex,
+        char delimiter)
+    {
+        var builder = new StringBuilder();
+
+        for (var rowIndex = minRowIndex; rowIndex <= maxRowIndex; rowIndex++)
+        {
+            if (rowIndex > minRowIndex)
+            {
+                builder.AppendLine();
+            }
+
+            for (var columnIndex = minColumnIndex; columnIndex <= maxColumnIndex; columnIndex++)
+            {
+                if (columnIndex > minColumnIndex)
+                {
+                    builder.Append(delimiter);
+                }
+
+                var value = table.Rows[rowIndex][columnIndex]?.ToString() ?? string.Empty;
+                builder.Append(EscapeDelimitedValue(value, delimiter));
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string EscapeDelimitedValue(string value, char delimiter)
+    {
+        return value.Contains('"', StringComparison.Ordinal)
+               || value.Contains(delimiter, StringComparison.Ordinal)
+               || value.Contains('\n', StringComparison.Ordinal)
+               || value.Contains('\r', StringComparison.Ordinal)
+            ? $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\""
+            : value;
+    }
+
+    private int GetPasteStartRowIndex()
+    {
+        if (SheetGrid.CurrentItem is DataRowView currentRowView)
+        {
+            var currentRowIndex = table.Rows.IndexOf(currentRowView.Row);
+            if (currentRowIndex >= 0)
+            {
+                return currentRowIndex;
+            }
+        }
+
+        var selectedRowView = SheetGrid.SelectedCells
+            .Select(cell => cell.Item)
+            .OfType<DataRowView>()
+            .FirstOrDefault();
+
+        if (selectedRowView is not null)
+        {
+            var selectedRowIndex = table.Rows.IndexOf(selectedRowView.Row);
+            if (selectedRowIndex >= 0)
+            {
+                return selectedRowIndex;
+            }
+        }
+
+        return SheetGrid.SelectedIndex >= 0
+            ? Math.Min(SheetGrid.SelectedIndex, table.Rows.Count)
+            : 0;
+    }
+
+    private int GetPasteStartColumnIndex()
+    {
+        var columnName = SheetGrid.CurrentColumn?.SortMemberPath;
+        if (!string.IsNullOrWhiteSpace(columnName) && table.Columns.Contains(columnName))
+        {
+            return table.Columns.IndexOf(columnName);
+        }
+
+        var selectedColumnName = SheetGrid.SelectedCells
+            .Select(cell => cell.Column?.SortMemberPath)
+            .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name) && table.Columns.Contains(name));
+
+        return selectedColumnName is not null
+            ? table.Columns.IndexOf(selectedColumnName)
+            : 0;
+    }
+
+    private void SelectPastedCell(int rowIndex, int columnIndex)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (rowIndex < 0
+                || rowIndex >= table.DefaultView.Count
+                || columnIndex < 0
+                || columnIndex >= table.Columns.Count)
+            {
+                return;
+            }
+
+            var rowView = table.DefaultView[rowIndex];
+            var columnName = table.Columns[columnIndex].ColumnName;
+            var column = SheetGrid.Columns.FirstOrDefault(gridColumn => gridColumn.SortMemberPath == columnName);
+            if (column is null)
+            {
+                return;
+            }
+
+            SheetGrid.SelectedCells.Clear();
+            SheetGrid.CurrentCell = new DataGridCellInfo(rowView, column);
+            SheetGrid.SelectedCells.Add(SheetGrid.CurrentCell);
+            SheetGrid.ScrollIntoView(rowView, column);
+        }, DispatcherPriority.Background);
+    }
+
+    private static List<List<string>> ParseClipboardGrid(string? clipboardText)
+    {
+        if (string.IsNullOrEmpty(clipboardText))
+        {
+            return new List<List<string>>();
+        }
+
+        var delimiter = clipboardText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
+        return ParseDelimitedText(clipboardText, delimiter);
+    }
+
+    private static List<List<string>> ParseDelimitedText(string text, char delimiter)
+    {
+        var rows = new List<List<string>>();
+        var row = new List<string>();
+        var field = new StringBuilder();
+        var inQuotes = false;
+
+        for (var index = 0; index < text.Length; index++)
+        {
+            var character = text[index];
+
+            if (character == '"')
+            {
+                if (inQuotes && index + 1 < text.Length && text[index + 1] == '"')
+                {
+                    field.Append('"');
+                    index++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (character == delimiter && !inQuotes)
+            {
+                row.Add(field.ToString());
+                field.Clear();
+            }
+            else if ((character == '\r' || character == '\n') && !inQuotes)
+            {
+                if (character == '\r' && index + 1 < text.Length && text[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                row.Add(field.ToString());
+                rows.Add(row);
+                row = new List<string>();
+                field.Clear();
+            }
+            else
+            {
+                field.Append(character);
+            }
+        }
+
+        if (field.Length > 0 || row.Count > 0 || text.EndsWith(delimiter))
+        {
+            row.Add(field.ToString());
+            rows.Add(row);
+        }
+
+        return rows;
     }
 
     private void AttachTableEvents()
