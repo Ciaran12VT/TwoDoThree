@@ -36,6 +36,7 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
     private bool isUpdatingDocument;
     private bool isUpdatingFormattedText;
     private bool isUpdatingText;
+    private PostResourceTypingStyleReset? pendingPostResourceTypingStyleReset;
 
     public ResourceLinkRichTextBox()
     {
@@ -82,18 +83,21 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
 
     public void InsertResourceToken(ResourceItem resource)
     {
+        TypingStyleSnapshot typingStyle = TypingStyleSnapshot.Capture(Selection, Foreground);
         string token = ResourceLinkHelper.CreateToken(resource);
         int insertionOffset = CaretCharacterIndex;
         Selection.Text = token;
+        int afterTokenOffset = insertionOffset + token.Length;
 
-        TextPointer? afterToken = GetTextPointerAtCharOffset(insertionOffset + token.Length);
+        TextPointer? afterToken = GetTextPointerAtCharOffset(afterTokenOffset);
         if (afterToken is not null)
         {
             CaretPosition = afterToken.GetInsertionPosition(LogicalDirection.Forward) ?? afterToken;
         }
 
         ApplyResourceLinkFormatting();
-        ResetTypingStyleAfterResourceLink();
+        pendingPostResourceTypingStyleReset = new PostResourceTypingStyleReset(afterTokenOffset, typingStyle);
+        RestoreTypingStyleAfterResourceLink(typingStyle);
         UpdateBoundTextAndFormatting();
     }
 
@@ -221,11 +225,14 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
             return;
         }
 
-        var caretPosition = CaretPosition;
+        int caretOffset = CaretCharacterIndex;
         UpdateBoundPlainText();
         ApplyResourceLinkFormatting();
+        ApplyPendingPostResourceTypingStyleReset(caretOffset);
         UpdateBoundFormattedText();
-        CaretPosition = caretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
+
+        TextPointer? restoredCaret = GetTextPointerAtCharOffset(caretOffset);
+        CaretPosition = restoredCaret?.GetInsertionPosition(LogicalDirection.Forward) ?? Document.ContentEnd;
     }
 
     private void ResourceLinkRichTextBox_PreviewDragOver(object sender, DragEventArgs e)
@@ -341,10 +348,36 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         UpdateBoundTextAndFormatting();
     }
 
-    private void ResetTypingStyleAfterResourceLink()
+    private void RestoreTypingStyleAfterResourceLink(TypingStyleSnapshot typingStyle)
     {
-        Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
-        Selection.ApplyPropertyValue(TextElement.ForegroundProperty, Foreground);
+        typingStyle.ApplyTo(Selection);
+    }
+
+    private void ApplyPendingPostResourceTypingStyleReset(int caretOffset)
+    {
+        if (pendingPostResourceTypingStyleReset is not { } reset ||
+            caretOffset <= reset.StartOffset)
+        {
+            return;
+        }
+
+        TextPointer? start = GetTextPointerAtCharOffset(reset.StartOffset);
+        TextPointer? end = GetTextPointerAtCharOffset(caretOffset);
+        if (start is null || end is null || start.CompareTo(end) >= 0)
+        {
+            return;
+        }
+
+        isApplyingFormat = true;
+        try
+        {
+            reset.TypingStyle.ApplyTo(new TextRange(start, end));
+        }
+        finally
+        {
+            isApplyingFormat = false;
+            pendingPostResourceTypingStyleReset = null;
+        }
     }
 
     private void ToggleTextDecoration(TextDecorationLocation location)
@@ -452,5 +485,88 @@ public sealed class ResourceLinkRichTextBox : RichTextBox
         }
 
         return currentOffset;
+    }
+
+    private sealed record PostResourceTypingStyleReset(
+        int StartOffset,
+        TypingStyleSnapshot TypingStyle);
+
+    private sealed class TypingStyleSnapshot
+    {
+        private TypingStyleSnapshot(
+            object fontWeight,
+            object foreground,
+            object fontStyle,
+            object fontFamily,
+            object fontSize,
+            object textDecorations)
+        {
+            FontWeight = fontWeight;
+            Foreground = foreground;
+            FontStyle = fontStyle;
+            FontFamily = fontFamily;
+            FontSize = fontSize;
+            TextDecorations = textDecorations;
+        }
+
+        private object FontWeight { get; }
+
+        private object Foreground { get; }
+
+        private object FontStyle { get; }
+
+        private object FontFamily { get; }
+
+        private object FontSize { get; }
+
+        private object TextDecorations { get; }
+
+        public static TypingStyleSnapshot Capture(TextSelection selection, Brush fallbackForeground)
+        {
+            return new TypingStyleSnapshot(
+                CaptureProperty(selection, TextElement.FontWeightProperty, FontWeights.Normal),
+                CaptureProperty(selection, TextElement.ForegroundProperty, fallbackForeground),
+                CaptureProperty(selection, TextElement.FontStyleProperty, FontStyles.Normal),
+                CaptureProperty(selection, TextElement.FontFamilyProperty, SystemFonts.MessageFontFamily),
+                CaptureProperty(selection, TextElement.FontSizeProperty, SystemFonts.MessageFontSize),
+                CaptureTextDecorations(selection));
+        }
+
+        public void ApplyTo(TextSelection selection)
+        {
+            ApplyToRange(selection);
+        }
+
+        public void ApplyTo(TextRange range)
+        {
+            ApplyToRange(range);
+        }
+
+        private void ApplyToRange(TextRange range)
+        {
+            range.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeight);
+            range.ApplyPropertyValue(TextElement.ForegroundProperty, Foreground);
+            range.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyle);
+            range.ApplyPropertyValue(TextElement.FontFamilyProperty, FontFamily);
+            range.ApplyPropertyValue(TextElement.FontSizeProperty, FontSize);
+            range.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations);
+        }
+
+        private static object CaptureProperty(
+            TextSelection selection,
+            DependencyProperty property,
+            object fallback)
+        {
+            object value = selection.GetPropertyValue(property);
+            return value == DependencyProperty.UnsetValue ? fallback : value;
+        }
+
+        private static object CaptureTextDecorations(TextSelection selection)
+        {
+            object value = selection.GetPropertyValue(Inline.TextDecorationsProperty);
+            return value is TextDecorationCollection decorations
+                ? decorations.Clone()
+                : new TextDecorationCollection();
+        }
     }
 }
