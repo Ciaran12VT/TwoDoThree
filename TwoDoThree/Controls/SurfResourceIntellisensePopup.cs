@@ -122,12 +122,12 @@ public sealed class SurfResourceIntellisensePopup
 
     private void PlacementTarget_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        HandleNavigationKey(e, focusListAfterMove: true);
+        HandleSearchNavigationKey(e);
     }
 
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        HandleNavigationKey(e, focusListAfterMove: true);
+        HandleSearchNavigationKey(e);
     }
 
     private void ResourceList_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -149,7 +149,7 @@ public sealed class SurfResourceIntellisensePopup
         placementTarget.PreviewKeyDown -= PlacementTarget_PreviewKeyDown;
     }
 
-    private void HandleNavigationKey(KeyEventArgs e, bool focusListAfterMove)
+    private void HandleSearchNavigationKey(KeyEventArgs e)
     {
         if (!popup.IsOpen)
         {
@@ -158,42 +158,22 @@ public sealed class SurfResourceIntellisensePopup
 
         if (e.Key == Key.Down)
         {
-            MoveSelection(1);
-            if (focusListAfterMove)
-            {
-                FocusSelectedListItem();
-            }
-
+            SelectAndFocusListItem(0);
             e.Handled = true;
         }
         else if (e.Key == Key.Up)
         {
-            MoveSelection(-1);
-            if (focusListAfterMove)
-            {
-                FocusSelectedListItem();
-            }
-
+            SelectAndFocusListItem(resourceList.Items.Count - 1);
             e.Handled = true;
         }
         else if (e.Key == Key.PageDown)
         {
-            MoveSelection(6);
-            if (focusListAfterMove)
-            {
-                FocusSelectedListItem();
-            }
-
+            SelectAndFocusListItem(Math.Min(5, resourceList.Items.Count - 1));
             e.Handled = true;
         }
         else if (e.Key == Key.PageUp)
         {
-            MoveSelection(-6);
-            if (focusListAfterMove)
-            {
-                FocusSelectedListItem();
-            }
-
+            SelectAndFocusListItem(0);
             e.Handled = true;
         }
         else if (e.Key == Key.Enter)
@@ -222,19 +202,29 @@ public sealed class SurfResourceIntellisensePopup
         resourceList.ScrollIntoView(resourceList.SelectedItem);
     }
 
-    private void FocusSelectedListItem()
+    private void SelectAndFocusListItem(int index)
     {
-        if (resourceList.SelectedItem is null)
+        if (resourceList.Items.Count == 0)
         {
+            resourceList.SelectedIndex = -1;
             return;
         }
 
-        resourceList.Focus();
-        resourceList.UpdateLayout();
-        if (resourceList.ItemContainerGenerator.ContainerFromItem(resourceList.SelectedItem) is ListBoxItem item)
-        {
-            item.Focus();
-        }
+        int nextIndex = Math.Clamp(index, 0, resourceList.Items.Count - 1);
+        resourceList.SelectedIndex = nextIndex;
+        resourceList.ScrollIntoView(resourceList.SelectedItem);
+        resourceList.Dispatcher.BeginInvoke(
+            () =>
+            {
+                resourceList.UpdateLayout();
+                resourceList.Focus();
+                if (resourceList.ItemContainerGenerator.ContainerFromIndex(resourceList.SelectedIndex) is ListBoxItem item)
+                {
+                    Keyboard.Focus(item);
+                    item.Focus();
+                }
+            },
+            DispatcherPriority.Input);
     }
 
     private void CommitSelection()
