@@ -8,7 +8,11 @@ public interface ITaskStore
 
     IReadOnlyList<TaskItem> LoadTasks();
 
+    IReadOnlyList<TagResourceCollection> LoadTagResources();
+
     void SaveTask(TaskItem task);
+
+    void SaveTagResource(string tag, ResourceItem resource, int sortOrder);
 
     void DeleteTask(int taskId);
 }

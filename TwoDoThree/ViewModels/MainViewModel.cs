@@ -89,6 +89,8 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<TaskItem> Tasks { get; } = new();
 
+    public ObservableCollection<TagResourceCollection> GlobalTagResources { get; } = new();
+
     public ObservableCollection<TaskBucketViewModel> TagTaskBuckets { get; } = new();
 
     public ObservableCollection<TaskBucketViewModel> StatusTaskBuckets { get; } = new();
@@ -292,6 +294,45 @@ public sealed class MainViewModel : ObservableObject
         RefreshEmailTaskAssociations();
         TasksView.Refresh();
         return resource;
+    }
+
+    public ResourceItem? MakeResourceGlobalForTag(string tag, ResourceItem resource)
+    {
+        var normalizedTag = tag.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedTag))
+        {
+            return null;
+        }
+
+        if (!taskStore.IsConfigured)
+        {
+            TaskPersistenceStatus = "SQL Server storage is not configured.";
+            return null;
+        }
+
+        var collection = GetOrCreateGlobalTagResourceCollection(normalizedTag);
+        if (collection.Resources.FirstOrDefault(existing => ResourcesMatch(existing, resource)) is { } existingResource)
+        {
+            TaskPersistenceStatus = $"Resource '{resource.Name}' is already global for {normalizedTag}.";
+            return existingResource;
+        }
+
+        var globalResource = CloneResource(resource);
+        var sortOrder = collection.Resources.Count;
+
+        try
+        {
+            taskStore.SaveTagResource(normalizedTag, globalResource, sortOrder);
+        }
+        catch (Exception ex)
+        {
+            TaskPersistenceStatus = $"SQL Server global resource save failed: {ex.Message}";
+            return null;
+        }
+
+        collection.Resources.Add(globalResource);
+        TaskPersistenceStatus = $"Made '{globalResource.Name}' global for {normalizedTag}.";
+        return globalResource;
     }
 
     public void FilterTasksByEmail(EmailMessage email)
@@ -525,6 +566,7 @@ public sealed class MainViewModel : ObservableObject
         pendingTaskSaves.Clear();
         taskPersistenceTimer.Stop();
         Tasks.Clear();
+        GlobalTagResources.Clear();
         SelectedTask = null;
 
         if (!taskStore.IsConfigured)
@@ -542,6 +584,12 @@ public sealed class MainViewModel : ObservableObject
             {
                 RegisterTask(task);
                 Tasks.Add(task);
+            }
+
+            foreach (var collection in taskStore.LoadTagResources())
+            {
+                RegisterGlobalTagResourceCollection(collection);
+                GlobalTagResources.Add(collection);
             }
 
             nextTaskId = Tasks.Count == 0 ? 1001 : Tasks.Max(task => task.Id) + 1;
@@ -720,6 +768,20 @@ public sealed class MainViewModel : ObservableObject
         QueueTaskSave(task);
     }
 
+    private TagResourceCollection GetOrCreateGlobalTagResourceCollection(string tag)
+    {
+        if (GlobalTagResources.FirstOrDefault(collection =>
+                string.Equals(collection.Tag, tag, StringComparison.OrdinalIgnoreCase)) is { } existing)
+        {
+            return existing;
+        }
+
+        var collection = new TagResourceCollection { Tag = tag };
+        RegisterGlobalTagResourceCollection(collection);
+        GlobalTagResources.Add(collection);
+        return collection;
+    }
+
     private static void AddDefaultNotesResource(TaskItem task)
     {
         task.Resources.Add(new ResourceItem
@@ -728,6 +790,15 @@ public sealed class MainViewModel : ObservableObject
             Kind = ResourceKind.Text,
             Content = string.Empty
         });
+    }
+
+    private void RegisterGlobalTagResourceCollection(TagResourceCollection collection)
+    {
+        collection.Resources.CollectionChanged += GlobalTagResources_CollectionChanged;
+        foreach (var resource in collection.Resources)
+        {
+            resource.PropertyChanged += GlobalResource_PropertyChanged;
+        }
     }
 
     private void RegisterTask(TaskItem task)
@@ -806,6 +877,31 @@ public sealed class MainViewModel : ObservableObject
 
         task.Resources.Add(resource);
         return resource;
+    }
+
+    private static ResourceItem CloneResource(ResourceItem resource)
+    {
+        return new ResourceItem
+        {
+            Name = resource.Name,
+            Kind = resource.Kind,
+            Content = resource.Content,
+            FormattedContent = resource.FormattedContent,
+            CodeLanguage = resource.CodeLanguage,
+            EmailMessageId = resource.EmailMessageId,
+            EmailFrom = resource.EmailFrom,
+            EmailSubject = resource.EmailSubject,
+            EmailReceivedOn = resource.EmailReceivedOn
+        };
+    }
+
+    private static bool ResourcesMatch(ResourceItem left, ResourceItem right)
+    {
+        return left.Kind == right.Kind
+               && string.Equals(left.Name, right.Name, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(left.Content, right.Content, StringComparison.Ordinal)
+               && string.Equals(left.FormattedContent, right.FormattedContent, StringComparison.Ordinal)
+               && string.Equals(left.EmailMessageId, right.EmailMessageId, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string CreatePocsFromEmail(EmailMessage email)
@@ -1100,6 +1196,27 @@ public sealed class MainViewModel : ObservableObject
         TasksView.Refresh();
     }
 
+    private void GlobalTagResources_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Replace
+            && e.NewItems is not null)
+        {
+            foreach (ResourceItem resource in e.NewItems)
+            {
+                resource.PropertyChanged += GlobalResource_PropertyChanged;
+            }
+        }
+
+        if (e.Action is NotifyCollectionChangedAction.Remove or NotifyCollectionChangedAction.Replace
+            && e.OldItems is not null)
+        {
+            foreach (ResourceItem resource in e.OldItems)
+            {
+                resource.PropertyChanged -= GlobalResource_PropertyChanged;
+            }
+        }
+    }
+
     private void TaskActions_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (FindTaskForActionCollection(sender) is not { } task)
@@ -1141,6 +1258,26 @@ public sealed class MainViewModel : ObservableObject
         QueueTaskSave(task);
     }
 
+    private void GlobalResource_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ResourceItem resource
+            || FindGlobalTagResourceCollection(resource) is not { } collection
+            || !taskStore.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            taskStore.SaveTagResource(collection.Tag, resource, collection.Resources.IndexOf(resource));
+            TaskPersistenceStatus = $"Saved global resource '{resource.Name}' for {collection.Tag}.";
+        }
+        catch (Exception ex)
+        {
+            TaskPersistenceStatus = $"SQL Server global resource save failed: {ex.Message}";
+        }
+    }
+
     private void Action_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not ActionItem action
@@ -1156,6 +1293,11 @@ public sealed class MainViewModel : ObservableObject
     private TaskItem? FindTaskForResourceCollection(object? sender)
     {
         return Tasks.FirstOrDefault(task => ReferenceEquals(task.Resources, sender));
+    }
+
+    private TagResourceCollection? FindGlobalTagResourceCollection(ResourceItem resource)
+    {
+        return GlobalTagResources.FirstOrDefault(collection => collection.Resources.Contains(resource));
     }
 
     private TaskItem? FindTaskForActionCollection(object? sender)

@@ -50,6 +50,19 @@ public sealed class SqlServerTaskStore : ITaskStore
             .ToList();
     }
 
+    public IReadOnlyList<TagResourceCollection> LoadTagResources()
+    {
+        if (!IsConfigured)
+        {
+            return [];
+        }
+
+        using var connection = OpenConnection();
+        EnsureSchemaIfNeeded(connection);
+
+        return LoadTagResourceRows(connection);
+    }
+
     public void SaveTask(TaskItem task)
     {
         if (!IsConfigured)
@@ -67,6 +80,18 @@ public sealed class SqlServerTaskStore : ITaskStore
         ReplaceActivityRows(connection, transaction, task);
 
         transaction.Commit();
+    }
+
+    public void SaveTagResource(string tag, ResourceItem resource, int sortOrder)
+    {
+        if (!IsConfigured)
+        {
+            return;
+        }
+
+        using var connection = OpenConnection();
+        EnsureSchemaIfNeeded(connection);
+        SaveTagResourceRow(connection, tag, resource, sortOrder);
     }
 
     public void DeleteTask(int taskId)
@@ -167,6 +192,25 @@ BEGIN
     );
 END;
 
+IF OBJECT_ID(N'dbo.TwoDoThreeTagResources', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.TwoDoThreeTagResources
+    (
+        ResourceId uniqueidentifier NOT NULL CONSTRAINT PK_TwoDoThreeTagResources PRIMARY KEY,
+        [Tag] nvarchar(250) NOT NULL,
+        SortOrder int NOT NULL,
+        Name nvarchar(500) NOT NULL,
+        Kind nvarchar(64) NOT NULL,
+        Content nvarchar(max) NOT NULL,
+        FormattedContent nvarchar(max) NOT NULL,
+        CodeLanguage nvarchar(64) NOT NULL,
+        EmailMessageId nvarchar(512) NOT NULL,
+        EmailFrom nvarchar(500) NOT NULL,
+        EmailSubject nvarchar(1000) NOT NULL,
+        EmailReceivedOn datetime2 NULL
+    );
+END;
+
 IF OBJECT_ID(N'dbo.TwoDoThreeActions', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.TwoDoThreeActions
@@ -202,6 +246,9 @@ END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeResources_TaskId' AND object_id = OBJECT_ID(N'dbo.TwoDoThreeResources'))
     CREATE INDEX IX_TwoDoThreeResources_TaskId ON dbo.TwoDoThreeResources(TaskId, SortOrder);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeTagResources_Tag' AND object_id = OBJECT_ID(N'dbo.TwoDoThreeTagResources'))
+    CREATE INDEX IX_TwoDoThreeTagResources_Tag ON dbo.TwoDoThreeTagResources([Tag], SortOrder);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TwoDoThreeActions_TaskId' AND object_id = OBJECT_ID(N'dbo.TwoDoThreeActions'))
     CREATE INDEX IX_TwoDoThreeActions_TaskId ON dbo.TwoDoThreeActions(TaskId, SortOrder);
@@ -284,6 +331,47 @@ ORDER BY TaskId, SortOrder;
                 EmailReceivedOn = ReadNullableDateTime(reader, "EmailReceivedOn")
             });
         }
+    }
+
+    private static IReadOnlyList<TagResourceCollection> LoadTagResourceRows(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT ResourceId, [Tag], Name, Kind, Content, FormattedContent, CodeLanguage,
+       EmailMessageId, EmailFrom, EmailSubject, EmailReceivedOn
+FROM dbo.TwoDoThreeTagResources
+ORDER BY [Tag], SortOrder;
+""";
+
+        using var reader = command.ExecuteReader();
+        var collections = new Dictionary<string, TagResourceCollection>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read())
+        {
+            var tag = ReadString(reader, "Tag");
+            if (!collections.TryGetValue(tag, out var collection))
+            {
+                collection = new TagResourceCollection { Tag = tag };
+                collections[tag] = collection;
+            }
+
+            collection.Resources.Add(new ResourceItem
+            {
+                Id = ReadGuid(reader, "ResourceId"),
+                Name = ReadString(reader, "Name"),
+                Kind = ParseEnum(ReadString(reader, "Kind"), ResourceKind.Text),
+                Content = ReadString(reader, "Content"),
+                FormattedContent = ReadString(reader, "FormattedContent"),
+                CodeLanguage = ReadString(reader, "CodeLanguage"),
+                EmailMessageId = ReadString(reader, "EmailMessageId"),
+                EmailFrom = ReadString(reader, "EmailFrom"),
+                EmailSubject = ReadString(reader, "EmailSubject"),
+                EmailReceivedOn = ReadNullableDateTime(reader, "EmailReceivedOn")
+            });
+        }
+
+        return collections.Values
+            .OrderBy(collection => collection.Tag, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static void LoadActionRows(SqlConnection connection, Dictionary<int, TaskItem> tasks)
@@ -383,6 +471,48 @@ WHEN NOT MATCHED THEN
         AddParameter(command, "@SortOrder", task.SortOrder);
         AddParameter(command, "@SurfScopeId", task.SurfScopeId);
         AddParameter(command, "@SurfScopeName", task.SurfScopeName);
+        command.ExecuteNonQuery();
+    }
+
+    private static void SaveTagResourceRow(SqlConnection connection, string tag, ResourceItem resource, int sortOrder)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+MERGE dbo.TwoDoThreeTagResources WITH (HOLDLOCK) AS target
+USING (SELECT @ResourceId AS ResourceId) AS source
+ON target.ResourceId = source.ResourceId
+WHEN MATCHED THEN
+    UPDATE SET
+        [Tag] = @Tag,
+        SortOrder = @SortOrder,
+        Name = @Name,
+        Kind = @Kind,
+        Content = @Content,
+        FormattedContent = @FormattedContent,
+        CodeLanguage = @CodeLanguage,
+        EmailMessageId = @EmailMessageId,
+        EmailFrom = @EmailFrom,
+        EmailSubject = @EmailSubject,
+        EmailReceivedOn = @EmailReceivedOn
+WHEN NOT MATCHED THEN
+    INSERT (ResourceId, [Tag], SortOrder, Name, Kind, Content, FormattedContent, CodeLanguage,
+            EmailMessageId, EmailFrom, EmailSubject, EmailReceivedOn)
+    VALUES (@ResourceId, @Tag, @SortOrder, @Name, @Kind, @Content, @FormattedContent, @CodeLanguage,
+            @EmailMessageId, @EmailFrom, @EmailSubject, @EmailReceivedOn);
+""";
+
+        AddParameter(command, "@ResourceId", resource.Id);
+        AddParameter(command, "@Tag", tag);
+        AddParameter(command, "@SortOrder", sortOrder);
+        AddParameter(command, "@Name", resource.Name);
+        AddParameter(command, "@Kind", resource.Kind.ToString());
+        AddParameter(command, "@Content", resource.Content);
+        AddParameter(command, "@FormattedContent", resource.FormattedContent);
+        AddParameter(command, "@CodeLanguage", resource.CodeLanguage);
+        AddParameter(command, "@EmailMessageId", resource.EmailMessageId);
+        AddParameter(command, "@EmailFrom", resource.EmailFrom);
+        AddParameter(command, "@EmailSubject", resource.EmailSubject);
+        AddParameter(command, "@EmailReceivedOn", resource.EmailReceivedOn);
         command.ExecuteNonQuery();
     }
 

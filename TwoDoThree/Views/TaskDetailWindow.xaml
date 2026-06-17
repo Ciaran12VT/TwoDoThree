@@ -510,16 +510,37 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <TextBox Grid.Row="0"
+                                <DockPanel Grid.Row="0"
+                                           Margin="8,8,8,0"
+                                           LastChildFill="True">
+                                    <Button DockPanel.Dock="Right"
+                                            Width="30"
+                                            Height="24"
+                                            Margin="6,0,0,0"
+                                            Padding="0"
+                                            ToolTip="Refresh resource scope"
+                                            Command="{Binding RefreshResourceScopeCommand}">
+                                        <TextBlock Text="&#xE72C;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="13" />
+                                    </Button>
+                                    <ComboBox ItemsSource="{Binding ResourceScopeOptions}"
+                                              SelectedItem="{Binding SelectedResourceScope, Mode=TwoWay}"
+                                              DisplayMemberPath="DisplayName"
+                                              VerticalContentAlignment="Center" />
+                                </DockPanel>
+
+                                <TextBox Grid.Row="1"
                                          Margin="8"
                                          ToolTip="Filter resources"
                                          Text="{Binding ResourceSearchText, UpdateSourceTrigger=PropertyChanged}" />
 
                                 <TreeView x:Name="ResourceTree"
-                                          Grid.Row="1"
+                                          Grid.Row="2"
                                           ItemsSource="{Binding ResourceGroups}"
                                           MouseDoubleClick="ResourceTree_MouseDoubleClick"
                                           PreviewMouseMove="ResourceTree_PreviewMouseMove"

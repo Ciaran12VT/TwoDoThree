@@ -668,6 +668,9 @@ public partial class MainWindow : Window
 
         var window = new TaskDetailWindow(
             task,
+            ViewModel.Tasks,
+            ViewModel.GlobalTagResources,
+            ViewModel.MakeResourceGlobalForTag,
             ViewModel.Settings.Tags,
             ViewModel.Settings.Surf2,
             surf2IntegrationService,

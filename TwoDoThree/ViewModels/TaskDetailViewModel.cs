@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -15,6 +16,9 @@ public sealed class TaskDetailViewModel : ObservableObject
     private ResourceItem? selectedResource;
     private ActionItem? selectedAction;
     private string resourceSearchText = string.Empty;
+    private readonly IEnumerable<TaskItem> tasks;
+    private readonly IEnumerable<TagResourceCollection> globalTagResources;
+    private readonly Func<string, ResourceItem, ResourceItem?> makeResourceGlobal;
     private readonly Surf2IntegrationSettings surf2Settings;
     private readonly ISurf2IntegrationService surf2IntegrationService;
     private readonly ISurf2Launcher surf2Launcher;
@@ -24,15 +28,22 @@ public sealed class TaskDetailViewModel : ObservableObject
     private string surf2Status = string.Empty;
     private bool isInitializingSurfScope;
     private bool isLoadingSurfResources;
+    private ResourceScopeOption selectedResourceScope = ResourceScopeOption.ThisTask;
 
     public TaskDetailViewModel(
         TaskItem task,
+        IEnumerable<TaskItem> tasks,
+        IEnumerable<TagResourceCollection> globalTagResources,
+        Func<string, ResourceItem, ResourceItem?> makeResourceGlobal,
         TagSettings tagSettings,
         Surf2IntegrationSettings surf2Settings,
         ISurf2IntegrationService surf2IntegrationService,
         ISurf2Launcher surf2Launcher)
     {
         Task = task;
+        this.tasks = tasks;
+        this.globalTagResources = globalTagResources;
+        this.makeResourceGlobal = makeResourceGlobal;
         TagSettings = tagSettings;
         this.surf2Settings = surf2Settings;
         this.surf2IntegrationService = surf2IntegrationService;
@@ -46,9 +57,12 @@ public sealed class TaskDetailViewModel : ObservableObject
         SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null);
         AddActionCommand = new RelayCommand(_ => AddAction());
         RefreshSurfScopesCommand = new RelayCommand(async _ => await InitializeSurf2Async());
+        RefreshResourceScopeCommand = new RelayCommand(_ => RefreshResourceGroups());
 
+        RefreshResourceScopeOptions();
         RefreshResourceGroups();
         RenumberActions(Task.Actions);
+        Task.PropertyChanged += Task_PropertyChanged;
     }
 
     public TaskItem Task { get; }
@@ -63,7 +77,11 @@ public sealed class TaskDetailViewModel : ObservableObject
 
     public ObservableCollection<ResourceGroup> ResourceGroups { get; } = new();
 
+    public ObservableCollection<ResourceScopeOption> ResourceScopeOptions { get; } = new();
+
     public ObservableCollection<Surf2ScopeOption> SurfScopes { get; } = new();
+
+    public IReadOnlyList<string> ResourceScopeTags => SplitTags(Task.Tags).ToList();
 
     public ActionItem? SelectedAction
     {
@@ -94,6 +112,12 @@ public sealed class TaskDetailViewModel : ObservableObject
                 RefreshResourceGroups();
             }
         }
+    }
+
+    public ResourceScopeOption SelectedResourceScope
+    {
+        get => selectedResourceScope;
+        set => SetProperty(ref selectedResourceScope, value ?? ResourceScopeOption.ThisTask);
     }
 
     public bool IsSurf2IntegrationAvailable => surf2Settings.IsConfigured;
@@ -151,15 +175,34 @@ public sealed class TaskDetailViewModel : ObservableObject
 
     public ICommand RefreshSurfScopesCommand { get; }
 
+    public ICommand RefreshResourceScopeCommand { get; }
+
     public void RefreshResourceGroups(ResourceItem? preferredResource = null)
     {
         var resourceToSelect = preferredResource ?? SelectedResource;
 
+        RefreshResourceScopeOptions();
         RebuildResourceGroups();
 
-        SelectedResource = resourceToSelect is not null && Task.Resources.Contains(resourceToSelect)
+        var availableResources = GetResourceScopeResources().ToList();
+        SelectedResource = resourceToSelect is not null && availableResources.Contains(resourceToSelect)
             ? resourceToSelect
-            : Task.Resources.FirstOrDefault();
+            : availableResources.FirstOrDefault();
+    }
+
+    public void MakeResourceGlobalForTag(ResourceItem resource, string tag)
+    {
+        var globalResource = makeResourceGlobal(tag, resource);
+        if (globalResource is null)
+        {
+            return;
+        }
+
+        if (SelectedResourceScope.IsTagGlobal
+            && string.Equals(SelectedResourceScope.Tag, tag, StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshResourceGroups(globalResource);
+        }
     }
 
     public async Task InitializeSurf2Async()
@@ -788,11 +831,12 @@ public sealed class TaskDetailViewModel : ObservableObject
     {
         ResourceGroups.Clear();
         var filter = ResourceSearchText.Trim();
+        var sourceResources = GetResourceScopeResources().ToList();
 
         foreach (var kind in Enum.GetValues<ResourceKind>())
         {
             var group = new ResourceGroup(kind);
-            foreach (var resource in Task.Resources.Where(resource =>
+            foreach (var resource in sourceResources.Where(resource =>
                          resource.Kind == kind
                          && (string.IsNullOrWhiteSpace(filter)
                              || resource.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))))
@@ -805,6 +849,81 @@ public sealed class TaskDetailViewModel : ObservableObject
                 ResourceGroups.Add(group);
             }
         }
+    }
+
+    private void RefreshResourceScopeOptions()
+    {
+        var selectedKind = SelectedResourceScope.Kind;
+        var selectedTag = SelectedResourceScope.Tag;
+        var options = new List<ResourceScopeOption> { ResourceScopeOption.ThisTask };
+        foreach (var tag in SplitTags(Task.Tags))
+        {
+            options.Add(ResourceScopeOption.ForTagAll(tag));
+            options.Add(ResourceScopeOption.ForTagGlobal(tag));
+        }
+
+        ResourceScopeOptions.Clear();
+        foreach (var option in options)
+        {
+            ResourceScopeOptions.Add(option);
+        }
+
+        var selectedOption = ResourceScopeOptions.FirstOrDefault(option =>
+                                 option.Kind == selectedKind &&
+                                 string.Equals(option.Tag, selectedTag, StringComparison.OrdinalIgnoreCase))
+                             ?? ResourceScopeOption.ThisTask;
+        if (!ReferenceEquals(selectedResourceScope, selectedOption))
+        {
+            selectedResourceScope = selectedOption;
+            OnPropertyChanged(nameof(SelectedResourceScope));
+        }
+    }
+
+    private IEnumerable<ResourceItem> GetResourceScopeResources()
+    {
+        if (SelectedResourceScope.IsThisTask)
+        {
+            return Task.Resources;
+        }
+
+        if (SelectedResourceScope.IsTagGlobal)
+        {
+            return globalTagResources
+                .FirstOrDefault(collection =>
+                    string.Equals(collection.Tag, SelectedResourceScope.Tag, StringComparison.OrdinalIgnoreCase))
+                ?.Resources
+                ?? Enumerable.Empty<ResourceItem>();
+        }
+
+        return tasks
+            .Where(task => TaskHasTag(task, SelectedResourceScope.Tag))
+            .OrderBy(task => task.SortOrder)
+            .ThenBy(task => task.Id)
+            .SelectMany(task => task.Resources);
+    }
+
+    private void Task_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TaskItem.Tags))
+        {
+            RefreshResourceScopeOptions();
+            RefreshResourceGroups();
+            OnPropertyChanged(nameof(ResourceScopeTags));
+        }
+    }
+
+    private static bool TaskHasTag(TaskItem task, string tag)
+    {
+        return SplitTags(task.Tags)
+            .Any(taskTag => string.Equals(taskTag, tag, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<string> SplitTags(string tags)
+    {
+        return tags
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     private void TouchTask()

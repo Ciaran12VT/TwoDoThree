@@ -13,6 +13,7 @@ namespace TwoDoThree.Views;
 public partial class TaskDetailWindow : Window
 {
     private const double ToolbarScrollAmount = 42;
+    private const string MakeGlobalMenuItemTagPrefix = "MakeGlobal:";
 
     private static readonly string[] TextFontFamilies =
     [
@@ -35,6 +36,9 @@ public partial class TaskDetailWindow : Window
 
     public TaskDetailWindow(
         TaskItem task,
+        IEnumerable<TaskItem> tasks,
+        IEnumerable<TagResourceCollection> globalTagResources,
+        Func<string, ResourceItem, ResourceItem?> makeResourceGlobal,
         TagSettings tagSettings,
         Surf2IntegrationSettings surf2Settings,
         ISurf2IntegrationService surf2IntegrationService,
@@ -43,6 +47,9 @@ public partial class TaskDetailWindow : Window
         InitializeComponent();
         DataContext = new TaskDetailViewModel(
             task,
+            tasks,
+            globalTagResources,
+            makeResourceGlobal,
             tagSettings,
             surf2Settings,
             surf2IntegrationService,
@@ -103,7 +110,36 @@ public partial class TaskDetailWindow : Window
 
     private void ResourceTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
+        RemoveMakeGlobalResourceMenuItems();
+
         RenameResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem;
+        if (ResourceTree.SelectedItem is not ResourceItem
+            || DataContext is not TaskDetailViewModel viewModel)
+        {
+            return;
+        }
+
+        var tags = viewModel.ResourceScopeTags;
+        if (tags.Count == 0 || ResourceTree.ContextMenu is null)
+        {
+            return;
+        }
+
+        ResourceTree.ContextMenu.Items.Add(new Separator
+        {
+            Tag = MakeGlobalMenuItemTagPrefix
+        });
+
+        foreach (var tag in tags)
+        {
+            var item = new MenuItem
+            {
+                Header = $"Make Global for {tag}",
+                Tag = $"{MakeGlobalMenuItemTagPrefix}{tag}"
+            };
+            item.Click += MakeGlobalResourceMenuItem_Click;
+            ResourceTree.ContextMenu.Items.Add(item);
+        }
     }
 
     private void RenameResourceMenuItem_Click(object sender, RoutedEventArgs e)
@@ -124,6 +160,37 @@ public partial class TaskDetailWindow : Window
             if (DataContext is TaskDetailViewModel viewModel)
             {
                 viewModel.RefreshResourceGroups(resource);
+            }
+        }
+    }
+
+    private void MakeGlobalResourceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string tagToken }
+            || !tagToken.StartsWith(MakeGlobalMenuItemTagPrefix, StringComparison.Ordinal)
+            || ResourceTree.SelectedItem is not ResourceItem resource
+            || DataContext is not TaskDetailViewModel viewModel)
+        {
+            return;
+        }
+
+        var tag = tagToken[MakeGlobalMenuItemTagPrefix.Length..];
+        viewModel.MakeResourceGlobalForTag(resource, tag);
+    }
+
+    private void RemoveMakeGlobalResourceMenuItems()
+    {
+        if (ResourceTree.ContextMenu is null)
+        {
+            return;
+        }
+
+        for (var index = ResourceTree.ContextMenu.Items.Count - 1; index >= 0; index--)
+        {
+            if (ResourceTree.ContextMenu.Items[index] is FrameworkElement { Tag: string tag }
+                && tag.StartsWith(MakeGlobalMenuItemTagPrefix, StringComparison.Ordinal))
+            {
+                ResourceTree.ContextMenu.Items.RemoveAt(index);
             }
         }
     }
