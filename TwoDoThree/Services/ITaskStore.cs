@@ -9,4 +9,6 @@ public interface ITaskStore
     IReadOnlyList<TaskItem> LoadTasks();
 
     void SaveTask(TaskItem task);
+
+    void DeleteTask(int taskId);
 }

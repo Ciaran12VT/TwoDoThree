@@ -554,6 +554,9 @@
                                               Tag="{x:Static models:TaskStatus.Cancelled}"
                                               Click="SetTaskStatusMenuItem_Click" />
                                 </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Delete"
+                                          Click="DeleteTaskMenuItem_Click" />
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.RowStyle>

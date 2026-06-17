@@ -294,6 +294,45 @@ public sealed class MainViewModel : ObservableObject
         SetTaskStatus(task, TaskItemStatus.Active);
     }
 
+    public bool DeleteTask(TaskItem task)
+    {
+        int taskIndex = Tasks.IndexOf(task);
+        if (taskIndex < 0)
+        {
+            return false;
+        }
+
+        bool hadPendingSave = pendingTaskSaves.Remove(task);
+
+        try
+        {
+            taskStore.DeleteTask(task.Id);
+        }
+        catch (Exception ex)
+        {
+            if (hadPendingSave)
+            {
+                pendingTaskSaves.Add(task);
+            }
+
+            TaskPersistenceStatus = $"SQL Server delete failed: {ex.Message}";
+            return false;
+        }
+
+        UnregisterTask(task);
+        Tasks.RemoveAt(taskIndex);
+        NormalizeTaskSortOrder();
+        RefreshEmailTaskAssociations();
+        RefreshTaskBuckets();
+        TasksView.Refresh();
+        List<TaskItem> visibleTasks = TasksView.Cast<TaskItem>().ToList();
+        SelectedTask = visibleTasks.Count == 0
+            ? null
+            : visibleTasks[Math.Min(taskIndex, visibleTasks.Count - 1)];
+        TaskPersistenceStatus = $"Deleted task {task.Id}.";
+        return true;
+    }
+
     public void MoveTask(TaskItem task, TaskItem? targetTask, bool insertAfter)
     {
         var oldIndex = Tasks.IndexOf(task);
@@ -648,6 +687,24 @@ public sealed class MainViewModel : ObservableObject
         foreach (var action in task.Actions)
         {
             action.PropertyChanged += Action_PropertyChanged;
+        }
+    }
+
+    private void UnregisterTask(TaskItem task)
+    {
+        task.PropertyChanged -= Task_PropertyChanged;
+        task.Resources.CollectionChanged -= TaskResources_CollectionChanged;
+        task.Actions.CollectionChanged -= TaskActions_CollectionChanged;
+        task.Activities.CollectionChanged -= TaskActivities_CollectionChanged;
+
+        foreach (var resource in task.Resources)
+        {
+            resource.PropertyChanged -= Resource_PropertyChanged;
+        }
+
+        foreach (var action in task.Actions)
+        {
+            action.PropertyChanged -= Action_PropertyChanged;
         }
     }
 

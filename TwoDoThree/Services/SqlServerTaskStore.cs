@@ -69,6 +69,21 @@ public sealed class SqlServerTaskStore : ITaskStore
         transaction.Commit();
     }
 
+    public void DeleteTask(int taskId)
+    {
+        if (!IsConfigured)
+        {
+            return;
+        }
+
+        using var connection = OpenConnection();
+        EnsureSchemaIfNeeded(connection);
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM dbo.TwoDoThreeTasks WHERE Id = @Id;";
+        AddParameter(command, "@Id", taskId);
+        command.ExecuteNonQuery();
+    }
+
     private SqlConnection OpenConnection()
     {
         var connection = new SqlConnection(settings.ConnectionString);

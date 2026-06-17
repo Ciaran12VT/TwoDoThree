@@ -415,6 +415,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private void DeleteTaskMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedTask is not { } task)
+        {
+            return;
+        }
+
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            "Are you sure you want to permanently delete this task?",
+            "Delete task",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        if (ViewModel.DeleteTask(task))
+        {
+            CloseOpenTaskDetailWindows(task);
+            return;
+        }
+
+        MessageBox.Show(
+            this,
+            ViewModel.TaskPersistenceStatus,
+            "Delete task",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
     private void HeaderFilterTextBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is TextBox textBox && !textBox.IsKeyboardFocusWithin)
@@ -510,6 +543,18 @@ public partial class MainWindow : Window
                 && ReferenceEquals(viewModel.Task, task))
             {
                 viewModel.RefreshResourceGroups(selectedResource);
+            }
+        }
+    }
+
+    private void CloseOpenTaskDetailWindows(TaskItem task)
+    {
+        foreach (var window in openTaskDetailWindows.ToList())
+        {
+            if (window.DataContext is TaskDetailViewModel viewModel
+                && ReferenceEquals(viewModel.Task, task))
+            {
+                window.Close();
             }
         }
     }
