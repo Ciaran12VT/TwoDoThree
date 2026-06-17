@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.SqlClient;
 using TwoDoThree.Models;
 
 namespace TwoDoThree.Services;
@@ -48,6 +51,12 @@ public sealed class Surf2Launcher : ISurf2Launcher
             ColumnNumber = resourceLink.ColumnNumber
         };
         string json = JsonSerializer.Serialize(request, JsonOptions);
+
+        if (await TrySendToExistingSurf2Async(request, TimeSpan.FromMilliseconds(900), cancellationToken))
+        {
+            return;
+        }
+
         string encodedJson = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         string executablePath = ResolveExecutablePath(settings);
 
@@ -77,6 +86,97 @@ public sealed class Surf2Launcher : ISurf2Launcher
         {
             throw new InvalidOperationException($"Surf2 exited before opening the resource. Exit code: {process.ExitCode}.");
         }
+    }
+
+    private static async Task<bool> TrySendToExistingSurf2Async(
+        Surf2ExternalOpenRequest request,
+        TimeSpan connectTimeout,
+        CancellationToken cancellationToken)
+    {
+        string pipeName = CreateSurf2PipeName(request.ConnectionString);
+
+        await using var pipe = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.Out,
+            PipeOptions.Asynchronous);
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            pipe.Connect(ToTimeoutMilliseconds(connectTimeout));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true)
+            {
+                AutoFlush = true
+            };
+
+            string requestJson = JsonSerializer.Serialize(request, JsonOptions);
+            await writer.WriteLineAsync(requestJson.AsMemory(), cancellationToken);
+            return true;
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static int ToTimeoutMilliseconds(TimeSpan timeout)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        return timeout.TotalMilliseconds >= int.MaxValue
+            ? int.MaxValue
+            : Math.Max(1, (int)Math.Ceiling(timeout.TotalMilliseconds));
+    }
+
+    private static string CreateSurf2PipeName(string connectionString)
+    {
+        string normalizedConnectionString;
+        try
+        {
+            normalizedConnectionString = NormalizeSurf2ConnectionString(connectionString).ToUpperInvariant();
+        }
+        catch (ArgumentException)
+        {
+            normalizedConnectionString = connectionString.Trim().ToUpperInvariant();
+        }
+
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedConnectionString));
+        return $"Surf2.ExternalOpen.{Convert.ToHexString(hash)[..16]}";
+    }
+
+    private static string NormalizeSurf2ConnectionString(string connectionString)
+    {
+        var builder = new SqlConnectionStringBuilder(connectionString);
+
+        if (string.IsNullOrWhiteSpace(builder.InitialCatalog))
+        {
+            builder.InitialCatalog = "Surf2";
+        }
+
+        if (!ContainsKeyword(connectionString, "TrustServerCertificate") &&
+            !ContainsKeyword(connectionString, "Trust Server Certificate"))
+        {
+            builder.TrustServerCertificate = true;
+        }
+
+        if (!ContainsKeyword(connectionString, "Connect Timeout") &&
+            !ContainsKeyword(connectionString, "Connection Timeout"))
+        {
+            builder.ConnectTimeout = 10;
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private static bool ContainsKeyword(string connectionString, string keyword)
+    {
+        return connectionString.Contains(keyword, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ResolveExecutablePath(Surf2IntegrationSettings settings)
