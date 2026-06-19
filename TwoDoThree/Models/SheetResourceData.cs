@@ -8,6 +8,19 @@ public sealed class SheetResourceData
     public List<string> Columns { get; set; } = new();
 
     public List<List<string>> Rows { get; set; } = new();
+
+    public Dictionary<string, SheetCellFormat> CellFormats { get; set; } = new();
+}
+
+public sealed class SheetCellFormat
+{
+    public string Background { get; set; } = string.Empty;
+
+    public bool Wrap { get; set; }
+
+    public bool Bold { get; set; }
+
+    public bool Italic { get; set; }
 }
 
 public static class SheetResourceSerializer
@@ -123,7 +136,43 @@ public static class SheetResourceSerializer
             }
         }
 
+        data.CellFormats ??= new Dictionary<string, SheetCellFormat>();
+        foreach (var (key, format) in data.CellFormats.ToList())
+        {
+            if (format is null
+                || !TryParseCellFormatKey(key, out var rowIndex, out var columnIndex)
+                || rowIndex < 0
+                || rowIndex >= data.Rows.Count
+                || columnIndex < 0
+                || columnIndex >= data.Columns.Count
+                || IsEmpty(format))
+            {
+                data.CellFormats.Remove(key);
+                continue;
+            }
+
+            format.Background = format.Background?.Trim() ?? string.Empty;
+        }
+
         return data;
+    }
+
+    private static bool TryParseCellFormatKey(string key, out int rowIndex, out int columnIndex)
+    {
+        rowIndex = -1;
+        columnIndex = -1;
+        var parts = key.Split(',');
+        return parts.Length == 2
+               && int.TryParse(parts[0], out rowIndex)
+               && int.TryParse(parts[1], out columnIndex);
+    }
+
+    private static bool IsEmpty(SheetCellFormat format)
+    {
+        return string.IsNullOrWhiteSpace(format.Background)
+               && !format.Wrap
+               && !format.Bold
+               && !format.Italic;
     }
 
     private static string EscapeCsvValue(string? value)

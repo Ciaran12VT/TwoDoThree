@@ -274,16 +274,35 @@ public sealed class MainViewModel : ObservableObject
 
     public TaskItem CreateTaskFromEmail(EmailMessage email)
     {
+        var task = CreateTaskDraftFromEmail(email);
+        AddTask(task);
+        SelectedTask = task;
+        TasksView.Refresh();
+        return task;
+    }
+
+    public TaskItem CreateTaskDraftFromEmail(EmailMessage email)
+    {
         var task = CreateTask(email.Subject, "email, outlook");
         task.Pocs = CreatePocsFromEmail(email);
         AddEmailResourceCore(task, email);
         task.Actions.Add(new ActionItem { ActionText = "Review the email and define the next step" });
         TaskDetailViewModel.RenumberActions(task.Actions);
+        return task;
+    }
+
+    public void CommitTaskDraft(TaskItem task)
+    {
+        if (Tasks.Contains(task))
+        {
+            SelectedTask = task;
+            TasksView.Refresh();
+            return;
+        }
 
         AddTask(task);
         SelectedTask = task;
         TasksView.Refresh();
-        return task;
     }
 
     public ResourceItem AddEmailResource(TaskItem task, EmailMessage email)

@@ -408,7 +408,7 @@ public partial class MainWindow : Window
     private void TasksGrid_PreviewDragOver(object sender, DragEventArgs e)
     {
         e.Effects = TryGetDraggedEmail(e, out _)
-                    && FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject) is { DataContext: TaskItem }
+                    && IsTaskGridEmailDropTarget(e.OriginalSource)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -417,16 +417,26 @@ public partial class MainWindow : Window
     private void TasksGrid_Drop(object sender, DragEventArgs e)
     {
         if (!TryGetDraggedEmail(e, out var email)
-            || email is null
-            || FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject) is not { DataContext: TaskItem task } row)
+            || email is null)
         {
             return;
         }
 
-        row.IsSelected = true;
-        row.Focus();
-        var resource = ViewModel.AddEmailResource(task, email);
-        RefreshOpenTaskDetailWindows(task, resource);
+        if (FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject) is { DataContext: TaskItem task } row)
+        {
+            row.IsSelected = true;
+            row.Focus();
+            var resource = ViewModel.AddEmailResource(task, email);
+            RefreshOpenTaskDetailWindows(task, resource);
+            e.Handled = true;
+            return;
+        }
+
+        if (IsTaskGridWhitespaceDropTarget(e.OriginalSource))
+        {
+            OpenTaskDetail(ViewModel.CreateTaskDraftFromEmail(email), activate: false, isDraft: true);
+        }
+
         e.Handled = true;
     }
 
@@ -659,7 +669,7 @@ public partial class MainWindow : Window
         };
     }
 
-    private void OpenTaskDetail(TaskItem task, bool activate)
+    private void OpenTaskDetail(TaskItem task, bool activate, bool isDraft = false)
     {
         if (activate)
         {
@@ -683,7 +693,19 @@ public partial class MainWindow : Window
         window.Closed += (_, _) =>
         {
             openTaskDetailWindows.Remove(window);
-            ViewModel.FlushPendingTaskSaves();
+            if (isDraft)
+            {
+                if (window.WasClosedWithCloseButton)
+                {
+                    ViewModel.CommitTaskDraft(task);
+                    ViewModel.FlushPendingTaskSaves();
+                }
+            }
+            else
+            {
+                ViewModel.FlushPendingTaskSaves();
+            }
+
             ViewModel.TasksView.Refresh();
         };
 
@@ -735,6 +757,23 @@ public partial class MainWindow : Window
     {
         task = e.Data.GetData(TaskDataFormat) as TaskItem;
         return task is not null;
+    }
+
+    private static bool IsTaskGridEmailDropTarget(object originalSource)
+    {
+        var source = originalSource as DependencyObject;
+        return FindAncestor<DataGridRow>(source) is { DataContext: TaskItem }
+               || IsTaskGridWhitespaceDropTarget(originalSource);
+    }
+
+    private static bool IsTaskGridWhitespaceDropTarget(object originalSource)
+    {
+        var source = originalSource as DependencyObject;
+        return source is not null
+               && FindAncestor<DataGridRow>(source) is null
+               && FindAncestor<DataGridColumnHeader>(source) is null
+               && FindAncestor<ScrollBar>(source) is null
+               && FindAncestor<DataGrid>(source) is not null;
     }
 
     private static TaskItem? GetTaskFromDropTarget(object originalSource)

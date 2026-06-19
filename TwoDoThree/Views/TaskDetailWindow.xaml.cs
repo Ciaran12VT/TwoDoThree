@@ -57,6 +57,8 @@ public partial class TaskDetailWindow : Window
         Loaded += TaskDetailWindow_Loaded;
     }
 
+    public bool WasClosedWithCloseButton { get; private set; }
+
     private async void TaskDetailWindow_Loaded(object sender, RoutedEventArgs e)
     {
         if (DataContext is TaskDetailViewModel viewModel)
@@ -431,6 +433,7 @@ public partial class TaskDetailWindow : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
+        WasClosedWithCloseButton = true;
         Close();
     }
 

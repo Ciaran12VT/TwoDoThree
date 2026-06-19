@@ -11,6 +11,48 @@
                    LastChildFill="False"
                    Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal"
+                        DockPanel.Dock="Left">
+                <Button Width="30"
+                        Height="30"
+                        Padding="0"
+                        ToolTip="Set selected cell background"
+                        Click="CellBackgroundButton_Click">
+                    <TextBlock Text="&#x25A0;"
+                               Foreground="#F59E0B"
+                               FontSize="14" />
+                </Button>
+                <Button Width="30"
+                        Height="30"
+                        Padding="0"
+                        Margin="6,0,0,0"
+                        ToolTip="Wrap selected cells"
+                        Click="WrapCellsButton_Click">
+                    <TextBlock Text="&#x21B5;"
+                               FontSize="16" />
+                </Button>
+                <Button Width="30"
+                        Height="30"
+                        Padding="0"
+                        Margin="6,0,0,0"
+                        ToolTip="Toggle selected cell bold"
+                        Click="BoldCellsButton_Click">
+                    <TextBlock Text="B"
+                               FontWeight="Bold"
+                               FontSize="14" />
+                </Button>
+                <Button Width="30"
+                        Height="30"
+                        Padding="0"
+                        Margin="6,0,0,0"
+                        ToolTip="Toggle selected cell italics"
+                        Click="ItalicCellsButton_Click">
+                    <TextBlock Text="I"
+                               FontStyle="Italic"
+                               FontSize="14" />
+                </Button>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
                         DockPanel.Dock="Right">
                 <Button Width="30"
                         Height="30"

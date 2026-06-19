@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using TwoDoThree.Models;
 
@@ -11,6 +12,17 @@ namespace TwoDoThree.Controls;
 
 public partial class SheetEditor : UserControl
 {
+    private static readonly IReadOnlyList<(string Name, string Color)> BackgroundColors =
+    [
+        ("No fill", string.Empty),
+        ("Yellow", "#FEF3C7"),
+        ("Green", "#DCFCE7"),
+        ("Blue", "#DBEAFE"),
+        ("Rose", "#FFE4E6"),
+        ("Purple", "#F3E8FF"),
+        ("Gray", "#E5E7EB")
+    ];
+
     public static readonly DependencyProperty ResourceProperty =
         DependencyProperty.Register(
             nameof(Resource),
@@ -19,6 +31,7 @@ public partial class SheetEditor : UserControl
             new PropertyMetadata(null, OnResourceChanged));
 
     private DataTable table = new();
+    private Dictionary<string, SheetCellFormat> cellFormats = new(StringComparer.Ordinal);
     private bool isUpdatingResource;
     private bool isUpdatingTable;
 
@@ -67,9 +80,15 @@ public partial class SheetEditor : UserControl
 
         try
         {
-            table = CreateTable(Resource?.Content);
+            var data = SheetResourceSerializer.Deserialize(Resource?.Content);
+            table = CreateTable(data);
+            cellFormats = data.CellFormats.ToDictionary(
+                pair => pair.Key,
+                pair => CloneFormat(pair.Value),
+                StringComparer.Ordinal);
             AttachTableEvents();
             SheetGrid.ItemsSource = table.DefaultView;
+            Dispatcher.BeginInvoke(RefreshVisibleCellFormatting, DispatcherPriority.Background);
         }
         finally
         {
@@ -93,18 +112,22 @@ public partial class SheetEditor : UserControl
 
     private void DeleteRowButton_Click(object sender, RoutedEventArgs e)
     {
-        var rows = SheetGrid.SelectedItems
+        var rowIndexes = SheetGrid.SelectedItems
             .OfType<DataRowView>()
             .Select(rowView => rowView.Row)
             .Where(row => row.RowState != DataRowState.Detached && row.RowState != DataRowState.Deleted)
+            .Select(row => table.Rows.IndexOf(row))
+            .Where(rowIndex => rowIndex >= 0)
             .Distinct()
+            .OrderByDescending(rowIndex => rowIndex)
             .ToList();
 
-        foreach (var row in rows)
+        foreach (var rowIndex in rowIndexes)
         {
-            table.Rows.Remove(row);
+            table.Rows.RemoveAt(rowIndex);
         }
 
+        RemoveCellFormatRows(rowIndexes);
         SyncResourceFromTable();
     }
 
@@ -121,7 +144,9 @@ public partial class SheetEditor : UserControl
             columnName = table.Columns[table.Columns.Count - 1].ColumnName;
         }
 
+        var columnIndex = table.Columns.IndexOf(columnName);
         table.Columns.Remove(columnName);
+        RemoveCellFormatColumn(columnIndex);
         RefreshGridColumns();
         SyncResourceFromTable();
     }
@@ -130,6 +155,13 @@ public partial class SheetEditor : UserControl
     {
         e.Column.MinWidth = 90;
         e.Column.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+        e.Column.CellStyle = CreateCellStyle();
+
+        if (e.Column is DataGridTextColumn textColumn)
+        {
+            textColumn.ElementStyle = CreateTextBlockStyle();
+            textColumn.EditingElementStyle = CreateTextBoxStyle();
+        }
     }
 
     private void SheetGrid_CurrentCellChanged(object? sender, EventArgs e)
@@ -157,6 +189,47 @@ public partial class SheetEditor : UserControl
     private void SheetGrid_RowEditEnding(object sender, DataGridRowEditEndingEventArgs e)
     {
         Dispatcher.BeginInvoke(SyncResourceFromTable, DispatcherPriority.Background);
+    }
+
+    private void CellBackgroundButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu { PlacementTarget = button };
+        foreach (var (name, color) in BackgroundColors)
+        {
+            var item = new MenuItem
+            {
+                Header = CreateBackgroundMenuHeader(name, color),
+                Tag = color
+            };
+            item.Click += (_, _) => SetSelectedCellBackground(color);
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void WrapCellsButton_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateSelectedCellFormats(format => format.Wrap = true);
+    }
+
+    private void BoldCellsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedCells = GetSelectedGridCells();
+        var shouldEnable = selectedCells.Any(cell => !GetCellFormat(cell.RowIndex, cell.ColumnIndex).Bold);
+        UpdateSelectedCellFormats(format => format.Bold = shouldEnable, selectedCells);
+    }
+
+    private void ItalicCellsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedCells = GetSelectedGridCells();
+        var shouldEnable = selectedCells.Any(cell => !GetCellFormat(cell.RowIndex, cell.ColumnIndex).Italic);
+        UpdateSelectedCellFormats(format => format.Italic = shouldEnable, selectedCells);
     }
 
     private void Table_Changed(object sender, EventArgs e)
@@ -189,7 +262,8 @@ public partial class SheetEditor : UserControl
         {
             Columns = table.Columns.Cast<DataColumn>()
                 .Select(column => column.ColumnName)
-                .ToList()
+                .ToList(),
+            CellFormats = GetValidCellFormats()
         };
 
         foreach (DataRow row in table.Rows)
@@ -207,9 +281,8 @@ public partial class SheetEditor : UserControl
         return SheetResourceSerializer.Serialize(data);
     }
 
-    private static DataTable CreateTable(string? content)
+    private static DataTable CreateTable(SheetResourceData data)
     {
-        var data = SheetResourceSerializer.Deserialize(content);
         var dataTable = new DataTable();
 
         foreach (var column in data.Columns)
@@ -249,6 +322,7 @@ public partial class SheetEditor : UserControl
     {
         SheetGrid.ItemsSource = null;
         SheetGrid.ItemsSource = table.DefaultView;
+        Dispatcher.BeginInvoke(RefreshVisibleCellFormatting, DispatcherPriority.Background);
     }
 
     private bool TryPasteClipboardIntoGrid()
@@ -314,6 +388,51 @@ public partial class SheetEditor : UserControl
         return true;
     }
 
+    private void SetSelectedCellBackground(string color)
+    {
+        UpdateSelectedCellFormats(format => format.Background = color);
+    }
+
+    private void UpdateSelectedCellFormats(Action<SheetCellFormat> update)
+    {
+        UpdateSelectedCellFormats(update, GetSelectedGridCells());
+    }
+
+    private void UpdateSelectedCellFormats(Action<SheetCellFormat> update, IReadOnlyList<(int RowIndex, int ColumnIndex)> selectedCells)
+    {
+        if (selectedCells.Count == 0)
+        {
+            return;
+        }
+
+        SheetGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        SheetGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        foreach (var (rowIndex, columnIndex) in selectedCells)
+        {
+            if (rowIndex < 0 || rowIndex >= table.Rows.Count || columnIndex < 0 || columnIndex >= table.Columns.Count)
+            {
+                continue;
+            }
+
+            var key = GetCellFormatKey(rowIndex, columnIndex);
+            if (!cellFormats.TryGetValue(key, out var format))
+            {
+                format = new SheetCellFormat();
+                cellFormats[key] = format;
+            }
+
+            update(format);
+            if (IsEmpty(format))
+            {
+                cellFormats.Remove(key);
+            }
+        }
+
+        SyncResourceFromTable();
+        RefreshVisibleCellFormatting();
+    }
+
     private bool TryCopySelectionToClipboard()
     {
         var selectedCells = GetSelectedGridCells();
@@ -355,6 +474,13 @@ public partial class SheetEditor : UserControl
         return currentCell.HasValue
             ? new List<(int RowIndex, int ColumnIndex)> { currentCell.Value }
             : new List<(int RowIndex, int ColumnIndex)>();
+    }
+
+    private SheetCellFormat GetCellFormat(int rowIndex, int columnIndex)
+    {
+        return cellFormats.TryGetValue(GetCellFormatKey(rowIndex, columnIndex), out var format)
+            ? format
+            : new SheetCellFormat();
     }
 
     private (int RowIndex, int ColumnIndex)? TryGetGridCellCoordinates(DataGridCellInfo cell)
@@ -490,6 +616,269 @@ public partial class SheetEditor : UserControl
             SheetGrid.SelectedCells.Add(SheetGrid.CurrentCell);
             SheetGrid.ScrollIntoView(rowView, column);
         }, DispatcherPriority.Background);
+    }
+
+    private Dictionary<string, SheetCellFormat> GetValidCellFormats()
+    {
+        return cellFormats
+            .Where(pair => TryParseCellFormatKey(pair.Key, out var rowIndex, out var columnIndex)
+                           && rowIndex >= 0
+                           && rowIndex < table.Rows.Count
+                           && columnIndex >= 0
+                           && columnIndex < table.Columns.Count
+                           && !IsEmpty(pair.Value))
+            .ToDictionary(
+                pair => pair.Key,
+                pair => CloneFormat(pair.Value),
+                StringComparer.Ordinal);
+    }
+
+    private void RemoveCellFormatRows(IReadOnlyCollection<int> removedRowIndexes)
+    {
+        if (removedRowIndexes.Count == 0)
+        {
+            return;
+        }
+
+        var removedRows = removedRowIndexes.ToHashSet();
+        var sortedRows = removedRows.OrderBy(rowIndex => rowIndex).ToList();
+        var shiftedFormats = new Dictionary<string, SheetCellFormat>(StringComparer.Ordinal);
+        foreach (var (key, format) in cellFormats)
+        {
+            if (!TryParseCellFormatKey(key, out var rowIndex, out var columnIndex) || removedRows.Contains(rowIndex))
+            {
+                continue;
+            }
+
+            var shift = sortedRows.Count(removedRowIndex => removedRowIndex < rowIndex);
+            shiftedFormats[GetCellFormatKey(rowIndex - shift, columnIndex)] = format;
+        }
+
+        cellFormats = shiftedFormats;
+    }
+
+    private void RemoveCellFormatColumn(int removedColumnIndex)
+    {
+        if (removedColumnIndex < 0)
+        {
+            return;
+        }
+
+        var shiftedFormats = new Dictionary<string, SheetCellFormat>(StringComparer.Ordinal);
+        foreach (var (key, format) in cellFormats)
+        {
+            if (!TryParseCellFormatKey(key, out var rowIndex, out var columnIndex)
+                || columnIndex == removedColumnIndex)
+            {
+                continue;
+            }
+
+            var shiftedColumnIndex = columnIndex > removedColumnIndex
+                ? columnIndex - 1
+                : columnIndex;
+            shiftedFormats[GetCellFormatKey(rowIndex, shiftedColumnIndex)] = format;
+        }
+
+        cellFormats = shiftedFormats;
+    }
+
+    private void RefreshVisibleCellFormatting()
+    {
+        foreach (var cell in FindVisualChildren<DataGridCell>(SheetGrid))
+        {
+            ApplyFormatToCell(cell);
+        }
+    }
+
+    private void SheetGridCell_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is DataGridCell cell)
+        {
+            ApplyFormatToCell(cell);
+        }
+    }
+
+    private void SheetCellTextElement_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is DependencyObject dependencyObject
+            && FindAncestor<DataGridCell>(dependencyObject) is { } cell)
+        {
+            ApplyFormatToCell(cell);
+        }
+    }
+
+    private void ApplyFormatToCell(DataGridCell cell)
+    {
+        if (TryGetGridCellCoordinates(cell) is not { } coordinates)
+        {
+            return;
+        }
+
+        var format = GetCellFormat(coordinates.RowIndex, coordinates.ColumnIndex);
+        if (string.IsNullOrWhiteSpace(format.Background))
+        {
+            cell.ClearValue(Control.BackgroundProperty);
+        }
+        else
+        {
+            cell.Background = CreateBrush(format.Background);
+        }
+
+        cell.FontWeight = format.Bold ? FontWeights.Bold : FontWeights.Normal;
+        cell.FontStyle = format.Italic ? FontStyles.Italic : FontStyles.Normal;
+        ApplyTextWrapping(cell, format.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap);
+    }
+
+    private Style CreateCellStyle()
+    {
+        var style = new Style(typeof(DataGridCell));
+        style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, new RoutedEventHandler(SheetGridCell_Loaded)));
+        return style;
+    }
+
+    private Style CreateTextBlockStyle()
+    {
+        var style = new Style(typeof(TextBlock));
+        style.Setters.Add(new Setter(TextBlock.TextWrappingProperty, TextWrapping.NoWrap));
+        style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, new RoutedEventHandler(SheetCellTextElement_Loaded)));
+        return style;
+    }
+
+    private Style CreateTextBoxStyle()
+    {
+        var style = new Style(typeof(TextBox));
+        style.Setters.Add(new Setter(TextBox.TextWrappingProperty, TextWrapping.NoWrap));
+        style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, new RoutedEventHandler(SheetCellTextElement_Loaded)));
+        return style;
+    }
+
+    private static StackPanel CreateBackgroundMenuHeader(string name, string color)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new Border
+        {
+            Width = 14,
+            Height = 14,
+            Margin = new Thickness(0, 0, 8, 0),
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            Background = string.IsNullOrWhiteSpace(color) ? Brushes.Transparent : CreateBrush(color)
+        });
+        panel.Children.Add(new TextBlock { Text = name });
+        return panel;
+    }
+
+    private static void ApplyTextWrapping(DependencyObject parent, TextWrapping wrapping)
+    {
+        foreach (var textBlock in FindVisualChildren<TextBlock>(parent))
+        {
+            textBlock.TextWrapping = wrapping;
+        }
+
+        foreach (var textBox in FindVisualChildren<TextBox>(parent))
+        {
+            textBox.TextWrapping = wrapping;
+        }
+    }
+
+    private static SolidColorBrush CreateBrush(string color)
+    {
+        try
+        {
+            return ColorConverter.ConvertFromString(color) is Color parsedColor
+                ? new SolidColorBrush(parsedColor)
+                : Brushes.Transparent;
+        }
+        catch (FormatException)
+        {
+            return Brushes.Transparent;
+        }
+    }
+
+    private static string GetCellFormatKey(int rowIndex, int columnIndex)
+    {
+        return $"{rowIndex},{columnIndex}";
+    }
+
+    private static bool TryParseCellFormatKey(string key, out int rowIndex, out int columnIndex)
+    {
+        rowIndex = -1;
+        columnIndex = -1;
+        var parts = key.Split(',');
+        return parts.Length == 2
+               && int.TryParse(parts[0], out rowIndex)
+               && int.TryParse(parts[1], out columnIndex);
+    }
+
+    private static SheetCellFormat CloneFormat(SheetCellFormat format)
+    {
+        return new SheetCellFormat
+        {
+            Background = format.Background,
+            Wrap = format.Wrap,
+            Bold = format.Bold,
+            Italic = format.Italic
+        };
+    }
+
+    private static bool IsEmpty(SheetCellFormat format)
+    {
+        return string.IsNullOrWhiteSpace(format.Background)
+               && !format.Wrap
+               && !format.Bold
+               && !format.Italic;
+    }
+
+    private (int RowIndex, int ColumnIndex)? TryGetGridCellCoordinates(DataGridCell cell)
+    {
+        if (cell.DataContext is not DataRowView rowView)
+        {
+            return null;
+        }
+
+        var rowIndex = table.Rows.IndexOf(rowView.Row);
+        var columnName = cell.Column?.SortMemberPath;
+        if (rowIndex < 0 || string.IsNullOrWhiteSpace(columnName) || !table.Columns.Contains(columnName))
+        {
+            return null;
+        }
+
+        var columnIndex = table.Columns.IndexOf(columnName);
+        return columnIndex >= 0
+            ? (rowIndex, columnIndex)
+            : null;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private static List<List<string>> ParseClipboardGrid(string? clipboardText)
