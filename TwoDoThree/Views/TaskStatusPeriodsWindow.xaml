@@ -21,13 +21,15 @@
                    TextTrimming="CharacterEllipsis"
                    Margin="0,0,0,12" />
 
-        <DataGrid Grid.Row="1"
+        <DataGrid x:Name="PeriodsGrid"
+                  Grid.Row="1"
                   ItemsSource="{Binding Periods}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
                   IsReadOnly="True"
                   HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal">
+                  GridLinesVisibility="Horizontal"
+                  MouseDoubleClick="PeriodsGrid_MouseDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Status"
                                     Width="140"

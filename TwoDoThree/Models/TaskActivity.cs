@@ -1,16 +1,49 @@
+using TwoDoThree.ViewModels;
+
 namespace TwoDoThree.Models;
 
-public sealed class TaskActivity
+public sealed class TaskActivity : ObservableObject
 {
-    public Guid Id { get; init; } = Guid.NewGuid();
+    private Guid id = Guid.NewGuid();
+    private DateTime occurredOn = DateTime.Now;
+    private string activity = string.Empty;
+    private TaskStatus? fromStatus;
+    private TaskStatus? toStatus;
+    private string statusMessage = string.Empty;
 
-    public DateTime OccurredOn { get; init; } = DateTime.Now;
+    public Guid Id
+    {
+        get => id;
+        set => SetProperty(ref id, value);
+    }
 
-    public string Activity { get; init; } = string.Empty;
+    public DateTime OccurredOn
+    {
+        get => occurredOn;
+        set => SetProperty(ref occurredOn, value);
+    }
 
-    public TaskStatus? FromStatus { get; init; }
+    public string Activity
+    {
+        get => activity;
+        set => SetProperty(ref activity, value ?? string.Empty);
+    }
 
-    public TaskStatus? ToStatus { get; init; }
+    public TaskStatus? FromStatus
+    {
+        get => fromStatus;
+        set => SetProperty(ref fromStatus, value);
+    }
 
-    public string StatusMessage { get; init; } = string.Empty;
+    public TaskStatus? ToStatus
+    {
+        get => toStatus;
+        set => SetProperty(ref toStatus, value);
+    }
+
+    public string StatusMessage
+    {
+        get => statusMessage;
+        set => SetProperty(ref statusMessage, value ?? string.Empty);
+    }
 }

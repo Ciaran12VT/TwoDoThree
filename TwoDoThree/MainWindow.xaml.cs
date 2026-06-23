@@ -386,7 +386,7 @@ public partial class MainWindow : Window
 
         if (task.Status != status)
         {
-            if (!StatusMessageWindow.TryPrompt(this, status, out var statusMessage))
+            if (!StatusMessageWindow.TryPrompt(this, task, status, out var statusMessage))
             {
                 e.Handled = true;
                 return;
@@ -462,7 +462,7 @@ public partial class MainWindow : Window
         if (sender is MenuItem { Tag: TaskItemStatus status }
             && ViewModel.SelectedTask is { } task)
         {
-            if (!StatusMessageWindow.TryPrompt(this, status, out var statusMessage))
+            if (!StatusMessageWindow.TryPrompt(this, task, status, out var statusMessage))
             {
                 return;
             }

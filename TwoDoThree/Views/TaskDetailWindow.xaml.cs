@@ -230,7 +230,7 @@ public partial class TaskDetailWindow : Window
             return;
         }
 
-        if (!StatusMessageWindow.TryPrompt(this, status, out var statusMessage))
+        if (!StatusMessageWindow.TryPrompt(this, viewModel.Task, status, out var statusMessage))
         {
             isUpdatingTaskStatusSelection = true;
             try

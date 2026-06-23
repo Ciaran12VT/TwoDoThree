@@ -1,0 +1,83 @@
+<Window x:Class="TwoDoThree.Views.TaskStatusPeriodEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit Status Period"
+        Icon="../Assets/AppIcon.ico"
+        Height="300"
+        Width="520"
+        MinHeight="300"
+        MinWidth="480"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="130" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Text="Status"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding StatusDisplay}"
+                   FontWeight="SemiBold" />
+
+        <TextBlock Grid.Row="1"
+                   Text="Start"
+                   Margin="0,12,0,0"
+                   VerticalAlignment="Center" />
+        <TextBox Grid.Row="1"
+                 Grid.Column="1"
+                 Margin="0,12,0,0"
+                 Text="{Binding StartText, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Grid.Row="2"
+                   Text="End"
+                   Margin="0,10,0,0"
+                   VerticalAlignment="Center" />
+        <TextBox Grid.Row="2"
+                 Grid.Column="1"
+                 Margin="0,10,0,0"
+                 IsEnabled="{Binding CanEditEndTime}"
+                 Text="{Binding EndText, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Grid.Row="3"
+                   Text="Status message"
+                   Margin="0,10,0,0"
+                   VerticalAlignment="Center" />
+        <TextBox Grid.Row="3"
+                 Grid.Column="1"
+                 Margin="0,10,0,0"
+                 MaxLength="180"
+                 IsEnabled="{Binding CanEditStatusMessage}"
+                 Text="{Binding StatusMessage, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Grid.Row="4"
+                   Grid.ColumnSpan="2"
+                   Margin="0,10,0,0"
+                   Foreground="#B91C1C"
+                   Text="{Binding ErrorMessage}"
+                   TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="5"
+                    Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="84"
+                    Content="Cancel"
+                    Click="CancelButton_Click" />
+            <Button Width="84"
+                    Margin="8,0,0,0"
+                    Content="Save"
+                    IsDefault="True"
+                    Click="SaveButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

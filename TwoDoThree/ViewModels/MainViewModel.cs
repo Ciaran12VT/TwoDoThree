@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using System.Windows.Data;
 using TwoDoThree.Models;
 using TwoDoThree.Services;
+using TwoDoThree.Views;
 using TaskItemStatus = TwoDoThree.Models.TaskStatus;
 
 namespace TwoDoThree.ViewModels;
@@ -21,7 +22,11 @@ public sealed class MainViewModel : ObservableObject
     private readonly DispatcherTimer emailSyncTimer;
     private readonly DispatcherTimer taskPersistenceTimer;
     private bool isEnforcingActiveTask;
+    private bool isOutOfHoursConfirmationOpen;
     private bool isEmailSyncing;
+    private DateTime? lastOutOfHoursConfirmationPromptedOn;
+    private int? lastOutOfHoursConfirmationTaskId;
+    private DateOnly? outOfHoursConfirmationSuppressedOn;
     private int nextTaskId = 1001;
     private string emailSyncStatus = string.Empty;
     private string taskPersistenceStatus = string.Empty;
@@ -74,7 +79,7 @@ public sealed class MainViewModel : ObservableObject
         {
             Interval = TimeSpan.FromSeconds(1)
         };
-        activeTaskTimer.Tick += (_, _) => UpdateActiveTaskTimeSpent();
+        activeTaskTimer.Tick += (_, _) => UpdateActiveTaskTimer();
         activeTaskTimer.Start();
 
         emailSyncTimer = new DispatcherTimer();
@@ -836,6 +841,11 @@ public sealed class MainViewModel : ObservableObject
         {
             action.PropertyChanged += Action_PropertyChanged;
         }
+
+        foreach (var activity in task.Activities)
+        {
+            activity.PropertyChanged += Activity_PropertyChanged;
+        }
     }
 
     private void UnregisterTask(TaskItem task)
@@ -853,6 +863,11 @@ public sealed class MainViewModel : ObservableObject
         foreach (var action in task.Actions)
         {
             action.PropertyChanged -= Action_PropertyChanged;
+        }
+
+        foreach (var activity in task.Activities)
+        {
+            activity.PropertyChanged -= Activity_PropertyChanged;
         }
     }
 
@@ -1260,6 +1275,26 @@ public sealed class MainViewModel : ObservableObject
     {
         if (FindTaskForActivityCollection(sender) is { } task)
         {
+            if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Replace
+                && e.NewItems is not null)
+            {
+                foreach (TaskActivity activity in e.NewItems)
+                {
+                    activity.PropertyChanged += Activity_PropertyChanged;
+                }
+            }
+
+            if (e.Action is NotifyCollectionChangedAction.Remove or NotifyCollectionChangedAction.Replace
+                && e.OldItems is not null)
+            {
+                foreach (TaskActivity activity in e.OldItems)
+                {
+                    activity.PropertyChanged -= Activity_PropertyChanged;
+                }
+            }
+
+            task.NotifyActivitiesChanged();
+            UpdateTaskTimeSpent(task);
             QueueTaskSave(task);
         }
     }
@@ -1305,6 +1340,20 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        task.UpdatedOn = DateTime.Now;
+        QueueTaskSave(task);
+    }
+
+    private void Activity_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not TaskActivity activity
+            || Tasks.FirstOrDefault(task => task.Activities.Contains(activity)) is not { } task)
+        {
+            return;
+        }
+
+        task.NotifyActivitiesChanged();
+        UpdateTaskTimeSpent(task);
         task.UpdatedOn = DateTime.Now;
         QueueTaskSave(task);
     }
@@ -1376,7 +1425,7 @@ public sealed class MainViewModel : ObservableObject
                     ? TaskItemStatus.Inactive
                     : task.StatusBeforeActive;
 
-                task.SetStatus(restoreStatus);
+                task.SetStatus(restoreStatus, task.GetPreviousStatusMessage(restoreStatus));
                 UpdateTaskTimeSpent(task);
             }
         }
@@ -1384,6 +1433,83 @@ public sealed class MainViewModel : ObservableObject
         {
             isEnforcingActiveTask = false;
         }
+    }
+
+    private void CheckOutOfHoursActiveTask(TaskItem activeTask)
+    {
+        var workingHours = Settings.WorkingHours;
+        if (!workingHours.IsOutOfHoursConfirmationEnabled
+            || isOutOfHoursConfirmationOpen)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        var today = DateOnly.FromDateTime(now);
+        if (outOfHoursConfirmationSuppressedOn == today
+            || workingHours.IsWithinWorkingHours(now))
+        {
+            return;
+        }
+
+        if (lastOutOfHoursConfirmationTaskId != activeTask.Id)
+        {
+            lastOutOfHoursConfirmationTaskId = activeTask.Id;
+            lastOutOfHoursConfirmationPromptedOn = null;
+        }
+
+        var interval = TimeSpan.FromMinutes(workingHours.ConfirmationIntervalMinutes);
+        if (lastOutOfHoursConfirmationPromptedOn.HasValue
+            && now - lastOutOfHoursConfirmationPromptedOn.Value < interval)
+        {
+            return;
+        }
+
+        lastOutOfHoursConfirmationPromptedOn = now;
+        isOutOfHoursConfirmationOpen = true;
+
+        try
+        {
+            var window = new OutOfHoursConfirmationWindow(activeTask);
+            var owner = GetDialogOwner();
+            if (owner is not null)
+            {
+                window.Owner = owner;
+            }
+
+            var confirmed = window.ShowDialog() == true;
+            if (window.DontAskAgainToday)
+            {
+                outOfHoursConfirmationSuppressedOn = today;
+            }
+
+            if (!confirmed && activeTask.Status == TaskItemStatus.Active)
+            {
+                RestoreActiveTaskAfterMissedConfirmation(activeTask);
+            }
+        }
+        finally
+        {
+            isOutOfHoursConfirmationOpen = false;
+        }
+    }
+
+    private void RestoreActiveTaskAfterMissedConfirmation(TaskItem activeTask)
+    {
+        var restoreStatus = activeTask.StatusBeforeActive == TaskItemStatus.Active
+            ? TaskItemStatus.Inactive
+            : activeTask.StatusBeforeActive;
+
+        SetTaskStatus(activeTask, restoreStatus, activeTask.GetPreviousStatusMessage(restoreStatus));
+        FlushPendingTaskSaves();
+    }
+
+    private static Window? GetDialogOwner()
+    {
+        return Application.Current.Windows
+                   .OfType<Window>()
+                   .FirstOrDefault(window => window.IsActive)
+               ?? Application.Current.MainWindow;
     }
 
     private void RecalculateAllTaskTimeSpent()
@@ -1395,51 +1521,25 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void UpdateActiveTaskTimeSpent()
+    private void UpdateActiveTaskTimer()
     {
         if (Tasks.FirstOrDefault(task => task.Status == TaskItemStatus.Active) is not { } activeTask)
         {
+            lastOutOfHoursConfirmationTaskId = null;
             return;
         }
 
         UpdateTaskTimeSpent(activeTask);
+        CheckOutOfHoursActiveTask(activeTask);
     }
 
     private static void UpdateTaskTimeSpent(TaskItem task)
     {
-        UpdateTaskTimeSpent(task, DateTime.Now);
+        TaskTimeCalculator.UpdateTimeSpent(task);
     }
 
     private static void UpdateTaskTimeSpent(TaskItem task, DateTime now)
     {
-        task.TimeSpent = CalculateTimeSpent(task, now);
-    }
-
-    private static TimeSpan CalculateTimeSpent(TaskItem task, DateTime now)
-    {
-        var total = TimeSpan.Zero;
-        DateTime? activeStartedOn = null;
-
-        foreach (var activity in task.Activities
-                     .Where(activity => activity.FromStatus.HasValue || activity.ToStatus.HasValue)
-                     .OrderBy(activity => activity.OccurredOn))
-        {
-            if (activity.ToStatus == TaskItemStatus.Active)
-            {
-                activeStartedOn = activity.OccurredOn;
-            }
-            else if (activity.FromStatus == TaskItemStatus.Active && activeStartedOn.HasValue)
-            {
-                total += activity.OccurredOn - activeStartedOn.Value;
-                activeStartedOn = null;
-            }
-        }
-
-        if (task.Status == TaskItemStatus.Active && activeStartedOn.HasValue)
-        {
-            total += now - activeStartedOn.Value;
-        }
-
-        return TimeSpan.FromSeconds(Math.Max(0, Math.Floor(total.TotalSeconds)));
+        TaskTimeCalculator.UpdateTimeSpent(task, now);
     }
 }

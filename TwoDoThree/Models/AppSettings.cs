@@ -11,4 +11,6 @@ public sealed class AppSettings
     public Surf2IntegrationSettings Surf2 { get; } = new();
 
     public TaskListSettings TaskList { get; } = new();
+
+    public WorkingHoursSettings WorkingHours { get; } = new();
 }

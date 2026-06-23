@@ -492,6 +492,103 @@
                                        Text="{Binding Surf2Status}"
                                        TextWrapping="Wrap" />
                         </Grid>
+
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="{x:Type Grid}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedSection}" Value="Working Hours">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="Working Hours"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,18" />
+
+                                    <CheckBox Content="Enable active-task confirmations outside working hours"
+                                              IsChecked="{Binding WorkingHours.IsOutOfHoursConfirmationEnabled}" />
+
+                                    <Grid Margin="0,16,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Text="Start time"
+                                                   VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1"
+                                                 Width="100"
+                                                 HorizontalAlignment="Left"
+                                                 Text="{Binding WorkingHours.WorkdayStart, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:hh\\:mm}}" />
+
+                                        <TextBlock Grid.Row="1"
+                                                   Text="End time"
+                                                   Margin="0,10,0,0"
+                                                   VerticalAlignment="Center" />
+                                        <TextBox Grid.Row="1"
+                                                 Grid.Column="1"
+                                                 Width="100"
+                                                 HorizontalAlignment="Left"
+                                                 Margin="0,10,0,0"
+                                                 Text="{Binding WorkingHours.WorkdayEnd, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:hh\\:mm}}" />
+
+                                        <TextBlock Grid.Row="2"
+                                                   Text="Prompt every"
+                                                   Margin="0,10,0,0"
+                                                   VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="2"
+                                                    Grid.Column="1"
+                                                    Orientation="Horizontal"
+                                                    Margin="0,10,0,0">
+                                            <TextBox Width="80"
+                                                     Text="{Binding WorkingHours.ConfirmationIntervalMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Text=" minutes"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="Working days"
+                                               FontWeight="SemiBold"
+                                               Margin="0,20,0,10" />
+                                    <UniformGrid Columns="2">
+                                        <CheckBox Content="Monday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Monday}" />
+                                        <CheckBox Content="Tuesday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Tuesday}" />
+                                        <CheckBox Content="Wednesday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Wednesday}" />
+                                        <CheckBox Content="Thursday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Thursday}" />
+                                        <CheckBox Content="Friday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Friday}" />
+                                        <CheckBox Content="Saturday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Saturday}" />
+                                        <CheckBox Content="Sunday"
+                                                  Margin="0,0,12,8"
+                                                  IsChecked="{Binding WorkingHours.Sunday}" />
+                                    </UniformGrid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>

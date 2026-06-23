@@ -136,16 +136,26 @@ public sealed class TaskItem : ObservableObject
     public ObservableCollection<TaskActivity> Activities { get; } = new();
 
     public string CurrentStatusMessage =>
-        Activities
-            .Where(activity => activity.ToStatus == Status
+        GetPreviousStatusMessage(Status);
+
+    public bool HasCurrentStatusMessage => !string.IsNullOrWhiteSpace(CurrentStatusMessage);
+
+    public string GetPreviousStatusMessage(TaskStatus targetStatus)
+    {
+        return Activities
+            .Where(activity => activity.ToStatus == targetStatus
                                && !string.IsNullOrWhiteSpace(activity.StatusMessage))
             .OrderByDescending(activity => activity.OccurredOn)
             .Select(activity => activity.StatusMessage.Trim())
             .FirstOrDefault() ?? string.Empty;
-
-    public bool HasCurrentStatusMessage => !string.IsNullOrWhiteSpace(CurrentStatusMessage);
+    }
 
     public void SetStatus(TaskStatus newStatus, string statusMessage = "")
+    {
+        SetStatus(newStatus, DateTime.Now, statusMessage);
+    }
+
+    public void SetStatus(TaskStatus newStatus, DateTime occurredOn, string statusMessage = "")
     {
         var previousStatus = status;
         if (previousStatus == newStatus)
@@ -162,7 +172,7 @@ public sealed class TaskItem : ObservableObject
         if (SetProperty(ref status, newStatus, nameof(Status)))
         {
             UpdatedOn = DateTime.Now;
-            AddStatusChangeActivity(previousStatus, newStatus, statusMessage);
+            AddStatusChangeActivity(previousStatus, newStatus, occurredOn, statusMessage);
         }
     }
 
@@ -185,18 +195,23 @@ public sealed class TaskItem : ObservableObject
         });
     }
 
-    private void AddStatusChangeActivity(TaskStatus fromStatus, TaskStatus toStatus, string statusMessage)
+    public void NotifyActivitiesChanged()
+    {
+        OnPropertyChanged(nameof(CurrentStatusMessage));
+        OnPropertyChanged(nameof(HasCurrentStatusMessage));
+    }
+
+    private void AddStatusChangeActivity(TaskStatus fromStatus, TaskStatus toStatus, DateTime occurredOn, string statusMessage)
     {
         Activities.Add(new TaskActivity
         {
-            OccurredOn = DateTime.Now,
+            OccurredOn = occurredOn,
             Activity = $"Status changed from {FormatStatus(fromStatus)} to {FormatStatus(toStatus)}.",
             FromStatus = fromStatus,
             ToStatus = toStatus,
             StatusMessage = statusMessage.Trim()
         });
-        OnPropertyChanged(nameof(CurrentStatusMessage));
-        OnPropertyChanged(nameof(HasCurrentStatusMessage));
+        NotifyActivitiesChanged();
     }
 
     private static string FormatStatus(TaskStatus taskStatus)

@@ -1,0 +1,56 @@
+<Window x:Class="TwoDoThree.Views.OutOfHoursConfirmationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Still Working?"
+        Icon="../Assets/AppIcon.ico"
+        Height="250"
+        Width="500"
+        MinHeight="250"
+        MinWidth="460"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Still working on this task?"
+                   FontSize="18"
+                   FontWeight="SemiBold" />
+
+        <TextBlock Grid.Row="1"
+                   Margin="0,10,0,0"
+                   Text="{Binding TaskTitle}"
+                   TextWrapping="Wrap"
+                   TextTrimming="CharacterEllipsis" />
+
+        <TextBlock Grid.Row="2"
+                   Margin="0,12,0,0"
+                   Foreground="{StaticResource MutedTextBrush}"
+                   Text="{Binding CountdownText}"
+                   TextWrapping="Wrap" />
+
+        <CheckBox Grid.Row="3"
+                  Margin="0,16,0,0"
+                  VerticalAlignment="Top"
+                  Content="Don't ask again today"
+                  IsChecked="{Binding DontAskAgainToday}" />
+
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="104"
+                    Content="Stop Activity"
+                    Click="StopButton_Click" />
+            <Button Width="112"
+                    Margin="8,0,0,0"
+                    Content="Still Working"
+                    IsDefault="True"
+                    Click="ConfirmButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

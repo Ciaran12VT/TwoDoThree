@@ -36,7 +36,9 @@ public sealed class SettingsViewModel : ObservableObject
             ConnectionString = settings.Surf2.ConnectionString,
             ExecutablePath = settings.Surf2.ExecutablePath
         };
-        Sections = new ObservableCollection<string> { "Email", "Tags", "Storage", "Surf2" };
+        WorkingHours = new WorkingHoursSettings();
+        WorkingHours.CopyFrom(settings.WorkingHours);
+        Sections = new ObservableCollection<string> { "Email", "Tags", "Storage", "Surf2", "Working Hours" };
         ConnectionStatus = GetDefaultConnectionStatus();
         StorageStatus = Database.IsConfigured
             ? "SQL Server connection string configured."
@@ -60,6 +62,8 @@ public sealed class SettingsViewModel : ObservableObject
     public DatabaseSettings Database { get; }
 
     public Surf2IntegrationSettings Surf2 { get; }
+
+    public WorkingHoursSettings WorkingHours { get; }
 
     public IReadOnlyList<EmailSource> EmailSourceValues { get; } = Enum.GetValues<EmailSource>();
 
@@ -103,6 +107,7 @@ public sealed class SettingsViewModel : ObservableObject
         settings.Surf2.IsEnabled = Surf2.IsEnabled;
         settings.Surf2.ConnectionString = Surf2.ConnectionString;
         settings.Surf2.ExecutablePath = Surf2.ExecutablePath;
+        settings.WorkingHours.CopyFrom(WorkingHours);
         TagManager.ApplyTo(settings.Tags);
     }
 

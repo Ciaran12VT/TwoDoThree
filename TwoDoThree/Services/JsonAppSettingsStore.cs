@@ -37,6 +37,7 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
             settings.Surf2.ConnectionString = snapshot.Surf2.ConnectionString;
             settings.Surf2.ExecutablePath = snapshot.Surf2.ExecutablePath;
             ApplyTaskList(settings.TaskList, snapshot.TaskList);
+            ApplyWorkingHours(settings.WorkingHours, snapshot.WorkingHours);
         }
         catch (JsonException)
         {
@@ -59,7 +60,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
             Tags = settings.Tags.Tags.ToList(),
             Database = DatabaseSettingsSnapshot.From(settings.Database),
             Surf2 = Surf2IntegrationSettingsSnapshot.From(settings.Surf2),
-            TaskList = TaskListSettingsSnapshot.From(settings.TaskList)
+            TaskList = TaskListSettingsSnapshot.From(settings.TaskList),
+            WorkingHours = WorkingHoursSettingsSnapshot.From(settings.WorkingHours)
         };
 
         File.WriteAllText(
@@ -88,6 +90,28 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         settings.SelectedFilterSetId = snapshot.SelectedFilterSetId;
     }
 
+    private static void ApplyWorkingHours(WorkingHoursSettings settings, WorkingHoursSettingsSnapshot snapshot)
+    {
+        settings.IsOutOfHoursConfirmationEnabled = snapshot.IsOutOfHoursConfirmationEnabled;
+        settings.WorkdayStart = ParseTime(snapshot.WorkdayStart, new TimeSpan(9, 0, 0));
+        settings.WorkdayEnd = ParseTime(snapshot.WorkdayEnd, new TimeSpan(17, 0, 0));
+        settings.ConfirmationIntervalMinutes = snapshot.ConfirmationIntervalMinutes;
+        settings.Monday = snapshot.Monday;
+        settings.Tuesday = snapshot.Tuesday;
+        settings.Wednesday = snapshot.Wednesday;
+        settings.Thursday = snapshot.Thursday;
+        settings.Friday = snapshot.Friday;
+        settings.Saturday = snapshot.Saturday;
+        settings.Sunday = snapshot.Sunday;
+    }
+
+    private static TimeSpan ParseTime(string value, TimeSpan fallback)
+    {
+        return TimeSpan.TryParse(value, out var parsed)
+            ? parsed
+            : fallback;
+    }
+
     private sealed class AppSettingsSnapshot
     {
         public EmailSettingsSnapshot Email { get; set; } = new();
@@ -99,6 +123,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         public Surf2IntegrationSettingsSnapshot Surf2 { get; set; } = new();
 
         public TaskListSettingsSnapshot TaskList { get; set; } = new();
+
+        public WorkingHoursSettingsSnapshot WorkingHours { get; set; } = new();
     }
 
     private sealed class DatabaseSettingsSnapshot
@@ -150,6 +176,49 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
                 FilterSets = settings.FilterSets
                     .Select(TaskFilterSetSnapshot.From)
                     .ToList()
+            };
+        }
+    }
+
+    private sealed class WorkingHoursSettingsSnapshot
+    {
+        public bool IsOutOfHoursConfirmationEnabled { get; set; }
+
+        public string WorkdayStart { get; set; } = "09:00";
+
+        public string WorkdayEnd { get; set; } = "17:00";
+
+        public int ConfirmationIntervalMinutes { get; set; } = 15;
+
+        public bool Monday { get; set; } = true;
+
+        public bool Tuesday { get; set; } = true;
+
+        public bool Wednesday { get; set; } = true;
+
+        public bool Thursday { get; set; } = true;
+
+        public bool Friday { get; set; } = true;
+
+        public bool Saturday { get; set; }
+
+        public bool Sunday { get; set; }
+
+        public static WorkingHoursSettingsSnapshot From(WorkingHoursSettings settings)
+        {
+            return new WorkingHoursSettingsSnapshot
+            {
+                IsOutOfHoursConfirmationEnabled = settings.IsOutOfHoursConfirmationEnabled,
+                WorkdayStart = settings.WorkdayStart.ToString(@"hh\:mm"),
+                WorkdayEnd = settings.WorkdayEnd.ToString(@"hh\:mm"),
+                ConfirmationIntervalMinutes = settings.ConfirmationIntervalMinutes,
+                Monday = settings.Monday,
+                Tuesday = settings.Tuesday,
+                Wednesday = settings.Wednesday,
+                Thursday = settings.Thursday,
+                Friday = settings.Friday,
+                Saturday = settings.Saturday,
+                Sunday = settings.Sunday
             };
         }
     }
