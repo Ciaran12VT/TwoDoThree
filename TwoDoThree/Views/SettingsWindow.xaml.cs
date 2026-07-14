@@ -13,18 +13,22 @@ public partial class SettingsWindow : Window
     private readonly IAppSettingsStore settingsStore;
     private readonly IGraphAuthService graphAuthService;
     private readonly IEmailCacheStore emailCacheStore;
+    private readonly Action flushPendingTaskSaves;
     private readonly ISurf2IntegrationService surf2IntegrationService = new Surf2IntegrationService();
+    private readonly DatabaseExportService databaseExportService = new();
 
     public SettingsWindow(
         AppSettings settings,
         IAppSettingsStore settingsStore,
         IGraphAuthService graphAuthService,
-        IEmailCacheStore emailCacheStore)
+        IEmailCacheStore emailCacheStore,
+        Action flushPendingTaskSaves)
     {
         this.settings = settings;
         this.settingsStore = settingsStore;
         this.graphAuthService = graphAuthService;
         this.emailCacheStore = emailCacheStore;
+        this.flushPendingTaskSaves = flushPendingTaskSaves;
         InitializeComponent();
         DataContext = new SettingsViewModel(settings);
     }
@@ -154,6 +158,51 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void ExportDatabaseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel viewModel)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export database and task resources",
+            FileName = $"2do3-export-{DateTime.Now:yyyyMMdd-HHmmss}.zip",
+            DefaultExt = ".zip",
+            AddExtension = true,
+            Filter = "Zip files|*.zip|All files|*.*",
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        viewModel.StorageStatus = "Preparing database export...";
+        try
+        {
+            flushPendingTaskSaves();
+            var databaseSettings = new DatabaseSettings
+            {
+                ConnectionString = viewModel.Database.ConnectionString
+            };
+
+            DatabaseExportResult result = await Task.Run(() =>
+                databaseExportService.Export(
+                    databaseSettings,
+                    emailCacheStore,
+                    dialog.FileName,
+                    CancellationToken.None));
+            viewModel.StorageStatus = CreateExportStatus(result);
+        }
+        catch (Exception ex)
+        {
+            viewModel.StorageStatus = $"Database export failed: {ex.Message}";
+        }
+    }
+
     private void BrowseSurf2ExecutableButton_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsViewModel viewModel)
@@ -208,5 +257,13 @@ public partial class SettingsWindow : Window
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    private static string CreateExportStatus(DatabaseExportResult result)
+    {
+        string warnings = result.WarningCount == 0
+            ? string.Empty
+            : $" {result.WarningCount} warning{(result.WarningCount == 1 ? string.Empty : "s")} listed in manifest.json.";
+        return $"Exported {result.TaskCount} task{(result.TaskCount == 1 ? string.Empty : "s")}, {result.DatabaseRowCount} database row{(result.DatabaseRowCount == 1 ? string.Empty : "s")}, {result.EmailResourceCount} email resource{(result.EmailResourceCount == 1 ? string.Empty : "s")}, {result.InlineResourceCount} inline resource{(result.InlineResourceCount == 1 ? string.Empty : "s")}, and {result.CopiedFileCount} linked file{(result.CopiedFileCount == 1 ? string.Empty : "s")} to {result.ZipFilePath}.{warnings}";
     }
 }

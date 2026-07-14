@@ -403,6 +403,10 @@
                                 <Button Width="126"
                                         Content="Test &amp; Initialize"
                                         Click="TestDatabaseButton_Click" />
+                                <Button Width="126"
+                                        Margin="8,0,0,0"
+                                        Content="Export Zip"
+                                        Click="ExportDatabaseButton_Click" />
                             </StackPanel>
 
                             <TextBlock Grid.Row="4"

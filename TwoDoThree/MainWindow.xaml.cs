@@ -85,7 +85,8 @@ public partial class MainWindow : Window
             ViewModel.Settings,
             settingsStore,
             graphAuthService,
-            emailCacheStore)
+            emailCacheStore,
+            ViewModel.FlushPendingTaskSaves)
         {
             Owner = this
         };
