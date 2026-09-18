@@ -10,6 +10,7 @@ public sealed class TaskListSettings : ObservableObject
     public static IReadOnlyList<TaskListColumn> DefaultVisibleColumns { get; } =
     [
         TaskListColumn.Id,
+        TaskListColumn.Priority,
         TaskListColumn.Title,
         TaskListColumn.Tags,
         TaskListColumn.Pocs,

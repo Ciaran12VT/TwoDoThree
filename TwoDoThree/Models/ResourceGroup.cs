@@ -17,6 +17,7 @@ public sealed class ResourceGroup
         ResourceKind.Sheet => "Sheets",
         ResourceKind.CodeSnippet => "Code Snippets",
         ResourceKind.SurfResource => "Surf Resources",
+        ResourceKind.File => "Files and Folders",
         _ => $"{Kind}s"
     };
 

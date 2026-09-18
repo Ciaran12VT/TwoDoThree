@@ -12,6 +12,7 @@ public sealed class TaskItem : ObservableObject
     private TaskStatus status = TaskStatus.Inactive;
     private TaskStatus statusBeforeActive = TaskStatus.Inactive;
     private int sortOrder;
+    private int priority = 1;
     private DateTime? dueBy;
     private DateTime createdOn = DateTime.Now;
     private DateTime updatedOn = DateTime.Now;
@@ -73,6 +74,12 @@ public sealed class TaskItem : ObservableObject
     {
         get => sortOrder;
         set => SetProperty(ref sortOrder, Math.Max(0, value));
+    }
+
+    public int Priority
+    {
+        get => priority;
+        set => SetProperty(ref priority, Math.Max(1, value));
     }
 
     public DateTime? DueBy

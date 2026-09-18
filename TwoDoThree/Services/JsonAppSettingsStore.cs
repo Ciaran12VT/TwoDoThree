@@ -83,9 +83,15 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
 
     private static void ApplyTaskList(TaskListSettings settings, TaskListSettingsSnapshot snapshot)
     {
-        settings.ReplaceVisibleColumns(snapshot.VisibleColumns.Count == 0
-            ? TaskListSettings.DefaultVisibleColumns
-            : snapshot.VisibleColumns);
+        var visibleColumns = snapshot.VisibleColumns.Count == 0
+            ? TaskListSettings.DefaultVisibleColumns.ToList()
+            : snapshot.VisibleColumns.ToList();
+        if (!snapshot.PriorityColumnInitialized && !visibleColumns.Contains(TaskListColumn.Priority))
+        {
+            visibleColumns.Insert(Math.Min(1, visibleColumns.Count), TaskListColumn.Priority);
+        }
+
+        settings.ReplaceVisibleColumns(visibleColumns);
         settings.ReplaceFilterSets(snapshot.FilterSets.Select(filterSet => filterSet.ToModel()));
         settings.SelectedFilterSetId = snapshot.SelectedFilterSetId;
     }
@@ -163,6 +169,8 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
     {
         public List<TaskListColumn> VisibleColumns { get; set; } = [];
 
+        public bool PriorityColumnInitialized { get; set; }
+
         public string SelectedFilterSetId { get; set; } = string.Empty;
 
         public List<TaskFilterSetSnapshot> FilterSets { get; set; } = [];
@@ -172,6 +180,7 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
             return new TaskListSettingsSnapshot
             {
                 VisibleColumns = settings.VisibleColumns.ToList(),
+                PriorityColumnInitialized = true,
                 SelectedFilterSetId = settings.SelectedFilterSetId,
                 FilterSets = settings.FilterSets
                     .Select(TaskFilterSetSnapshot.From)

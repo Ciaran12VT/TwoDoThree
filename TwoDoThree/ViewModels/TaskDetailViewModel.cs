@@ -53,8 +53,10 @@ public sealed class TaskDetailViewModel : ObservableObject
         AddCodeResourceCommand = new RelayCommand(_ => AddCodeResource());
         AddImageResourceCommand = new RelayCommand(_ => AddImageResource());
         AddAudioResourceCommand = new RelayCommand(_ => AddFileResource(ResourceKind.Audio));
+        AddLinkedFileCommand = new RelayCommand(_ => AddLinkedFile());
+        AddLinkedFolderCommand = new RelayCommand(_ => AddLinkedFolder());
         AddSurfResourceCommand = new RelayCommand(async _ => await AddSurfResourceAsync(), _ => CanAddSurfResource);
-        SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null);
+        SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null and { Kind: not ResourceKind.Folder });
         AddActionCommand = new RelayCommand(_ => AddAction());
         RefreshSurfScopesCommand = new RelayCommand(async _ => await InitializeSurf2Async());
         RefreshResourceScopeCommand = new RelayCommand(_ => RefreshResourceGroups());
@@ -166,6 +168,10 @@ public sealed class TaskDetailViewModel : ObservableObject
     public ICommand AddImageResourceCommand { get; }
 
     public ICommand AddAudioResourceCommand { get; }
+
+    public ICommand AddLinkedFileCommand { get; }
+
+    public ICommand AddLinkedFolderCommand { get; }
 
     public ICommand AddSurfResourceCommand { get; }
 
@@ -606,6 +612,11 @@ public sealed class TaskDetailViewModel : ObservableObject
         }
 
         var resource = SelectedResource;
+        if (resource.Kind == ResourceKind.File && !File.Exists(resource.Content))
+        {
+            MessageBox.Show("The linked file is missing or inaccessible.", "Save resource", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         var dialog = new SaveFileDialog
         {
             Title = "Save resource",
@@ -619,18 +630,25 @@ public sealed class TaskDetailViewModel : ObservableObject
             return;
         }
 
-        if (resource.Kind is ResourceKind.Image or ResourceKind.Audio
-            && File.Exists(resource.Content))
+        try
         {
-            File.Copy(resource.Content, dialog.FileName, overwrite: true);
+            if (resource.Kind is ResourceKind.Image or ResourceKind.Audio or ResourceKind.File
+                && File.Exists(resource.Content))
+            {
+                File.Copy(resource.Content, dialog.FileName, overwrite: true);
+            }
+            else if (resource.Kind == ResourceKind.Sheet)
+            {
+                File.WriteAllText(dialog.FileName, SheetResourceSerializer.ToCsv(resource.Content));
+            }
+            else
+            {
+                File.WriteAllText(dialog.FileName, resource.Content);
+            }
         }
-        else if (resource.Kind == ResourceKind.Sheet)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            File.WriteAllText(dialog.FileName, SheetResourceSerializer.ToCsv(resource.Content));
-        }
-        else
-        {
-            File.WriteAllText(dialog.FileName, resource.Content);
+            MessageBox.Show($"Could not save resource: {ex.Message}", "Save resource", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -643,6 +661,7 @@ public sealed class TaskDetailViewModel : ObservableObject
             ResourceKind.CodeSnippet => GetCodeExtension(resource.CodeLanguage),
             ResourceKind.Image => Path.GetExtension(resource.Content),
             ResourceKind.Audio => Path.GetExtension(resource.Content),
+            ResourceKind.File => Path.GetExtension(resource.Content),
             _ => ".txt"
         };
 
@@ -659,9 +678,10 @@ public sealed class TaskDetailViewModel : ObservableObject
         return resource.Kind switch
         {
             ResourceKind.Sheet => "CSV files|*.csv|All files|*.*",
-            ResourceKind.CodeSnippet => "Code files|*.cs;*.xml;*.html;*.css;*.js;*.ps1;*.cpp;*.java;*.php;*.vb;*.txt|All files|*.*",
+            ResourceKind.CodeSnippet => "Code files|*.cs;*.xml;*.html;*.css;*.js;*.ps1;*.cpp;*.java;*.php;*.vb;*.sql;*.txt|All files|*.*",
             ResourceKind.Image => "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All files|*.*",
             ResourceKind.Audio => "Audio files|*.mp3;*.wav;*.wma;*.m4a|All files|*.*",
+            ResourceKind.File => "All files|*.*",
             _ => "Text files|*.txt|All files|*.*"
         };
     }
@@ -680,6 +700,7 @@ public sealed class TaskDetailViewModel : ObservableObject
             "Java" => ".java",
             "PHP" => ".php",
             "VBNET" => ".vb",
+            "SQL" => ".sql",
             _ => ".txt"
         };
     }
@@ -788,6 +809,37 @@ public sealed class TaskDetailViewModel : ObservableObject
         });
     }
 
+    private void AddLinkedFile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select file to link",
+            Filter = "All files|*.*"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        AddResource(new ResourceItem
+        {
+            Name = Path.GetFileName(dialog.FileName),
+            Kind = ResourceKind.File,
+            Content = Path.GetFullPath(dialog.FileName)
+        });
+    }
+
+    private void AddLinkedFolder()
+    {
+        var dialog = new OpenFolderDialog { Title = "Select folder to link" };
+        if (dialog.ShowDialog() != true) return;
+
+        var path = Path.GetFullPath(dialog.FolderName);
+        AddResource(new ResourceItem
+        {
+            Name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path)),
+            Kind = ResourceKind.Folder,
+            Content = path
+        });
+    }
+
     private void AddResource(ResourceItem resource)
     {
         Task.Resources.Add(resource);
@@ -833,14 +885,18 @@ public sealed class TaskDetailViewModel : ObservableObject
         var filter = ResourceSearchText.Trim();
         var sourceResources = GetResourceScopeResources().ToList();
 
-        foreach (var kind in Enum.GetValues<ResourceKind>())
+        foreach (var kind in Enum.GetValues<ResourceKind>().Where(kind => kind != ResourceKind.Folder))
         {
             var group = new ResourceGroup(kind);
             foreach (var resource in sourceResources.Where(resource =>
-                         resource.Kind == kind
+                         (resource.Kind == kind || kind == ResourceKind.File && resource.Kind == ResourceKind.Folder)
                          && (string.IsNullOrWhiteSpace(filter)
                              || resource.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))))
             {
+                if (resource.Kind == ResourceKind.Folder && !resource.FolderChildrenLoaded && resource.FolderChildren.Count == 0)
+                {
+                    resource.FolderChildren.Add(FileSystemResourceNode.CreatePlaceholder());
+                }
                 group.Resources.Add(resource);
             }
 

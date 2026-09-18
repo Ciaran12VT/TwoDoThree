@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,6 +16,7 @@ namespace TwoDoThree.Views;
 public partial class TaskDetailWindow : Window
 {
     private const double ToolbarScrollAmount = 42;
+    private const int FolderPageSize = 250;
     private const string MakeGlobalMenuItemTagPrefix = "MakeGlobal:";
 
     private static readonly string[] TextFontFamilies =
@@ -55,6 +59,8 @@ public partial class TaskDetailWindow : Window
             surf2IntegrationService,
             surf2Launcher);
         Loaded += TaskDetailWindow_Loaded;
+        ResourceTree.AddHandler(TreeViewItem.ExpandedEvent, new RoutedEventHandler(ResourceTreeItem_Expanded));
+        ResourceTree.AddHandler(TreeViewItem.SelectedEvent, new RoutedEventHandler(ResourceTreeItem_Selected));
     }
 
     public bool WasClosedWithCloseButton { get; private set; }
@@ -69,21 +75,157 @@ public partial class TaskDetailWindow : Window
 
     private void ResourceTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject) is not { DataContext: ResourceItem resource } item
+        if (FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject) is not { } item
             || DataContext is not TaskDetailViewModel viewModel)
         {
             return;
         }
+        if (item.DataContext is not ResourceItem and not FileSystemResourceNode { Message: null }) return;
 
         item.IsSelected = true;
         item.Focus();
-        viewModel.SelectedResource = resource;
-        if (resource.Kind == ResourceKind.SurfResource)
+        if (item.DataContext is FileSystemResourceNode { Message: null } node)
         {
-            viewModel.OpenLinkedResource(resource);
+            OpenLinkedPath(node.Path);
+        }
+        else if (item.DataContext is ResourceItem resource)
+        {
+            viewModel.SelectedResource = resource;
+            if (resource.Kind == ResourceKind.SurfResource) viewModel.OpenLinkedResource(resource);
+            else if (resource.Kind is ResourceKind.File or ResourceKind.Folder) OpenLinkedPath(resource.Content);
         }
 
         e.Handled = true;
+    }
+
+    private async void ResourceTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (DataContext is not TaskDetailViewModel viewModel) return;
+
+        switch (e.NewValue)
+        {
+            case ResourceItem resource:
+                viewModel.SelectedResource = resource;
+                if (resource.Kind == ResourceKind.Folder)
+                    await LoadRootFolderAsync(resource);
+                break;
+            case FileSystemResourceNode { NextOffset: int offset, Siblings: { } siblings } more:
+                await LoadFolderPageAsync(more.Path, siblings, offset);
+                break;
+            case FileSystemResourceNode { Message: null } node:
+                viewModel.SelectedResource = new ResourceItem
+                {
+                    Name = node.Name,
+                    Kind = node.IsFolder ? ResourceKind.Folder : ResourceKind.File,
+                    Content = node.Path
+                };
+                if (node.IsFolder) await LoadChildFolderAsync(node);
+                break;
+        }
+    }
+
+    private async void ResourceTreeItem_Expanded(object sender, RoutedEventArgs e)
+    {
+        switch ((e.OriginalSource as TreeViewItem)?.DataContext)
+        {
+            case ResourceItem { Kind: ResourceKind.Folder } resource:
+                await LoadRootFolderAsync(resource);
+                break;
+            case FileSystemResourceNode { IsFolder: true } node:
+                await LoadChildFolderAsync(node);
+                break;
+        }
+    }
+
+    private void ResourceTreeItem_Selected(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is TreeViewItem item &&
+            (item.DataContext is ResourceItem { Kind: ResourceKind.Folder }
+             || item.DataContext is FileSystemResourceNode { IsFolder: true }))
+        {
+            item.IsExpanded = true;
+        }
+    }
+
+    private async Task LoadRootFolderAsync(ResourceItem resource)
+    {
+        if (resource.FolderChildrenLoaded) return;
+        resource.FolderChildrenLoaded = true;
+        await LoadFolderPageAsync(resource.Content, resource.FolderChildren, 0);
+    }
+
+    private async Task LoadChildFolderAsync(FileSystemResourceNode node)
+    {
+        if (node.IsLoaded) return;
+        node.IsLoaded = true;
+        await LoadFolderPageAsync(node.Path, node.Children, 0);
+    }
+
+    private static async Task LoadFolderPageAsync(string path, ObservableCollection<FileSystemResourceNode> children, int offset)
+    {
+        if (offset == 0) children.Clear();
+        else
+        {
+            var more = children.FirstOrDefault(child => child.NextOffset == offset);
+            if (more is not null) children.Remove(more);
+        }
+
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            children.Add(new FileSystemResourceNode(path, false, "Folder is missing or inaccessible"));
+            return;
+        }
+
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                children.Add(new FileSystemResourceNode(path, false, "Linked folder: open in Explorer to browse"));
+                return;
+            }
+
+            var page = await Task.Run(() => Directory.EnumerateFileSystemEntries(path)
+                .Skip(offset)
+                .Take(FolderPageSize + 1)
+                .Select(entry => new FileSystemResourceNode(entry, Directory.Exists(entry)))
+                .ToList());
+
+            foreach (var child in page.Take(FolderPageSize)) children.Add(child);
+            if (page.Count > FolderPageSize)
+            {
+                var more = new FileSystemResourceNode(path, false, "Load more…", offset + FolderPageSize)
+                {
+                    Siblings = children
+                };
+                children.Add(more);
+            }
+            else if (offset == 0 && page.Count == 0)
+            {
+                children.Add(new FileSystemResourceNode(path, false, "Folder is empty"));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            children.Add(new FileSystemResourceNode(path, false, $"Cannot list folder: {ex.Message}"));
+        }
+    }
+
+    private void OpenLinkedPath(string path)
+    {
+        try
+        {
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                MessageBox.Show(this, "The linked file or folder is missing or inaccessible.", "Open resource", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, ex.Message, "Open resource", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void ResourceTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

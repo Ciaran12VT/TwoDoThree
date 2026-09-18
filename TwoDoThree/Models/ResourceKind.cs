@@ -8,5 +8,7 @@ public enum ResourceKind
     CodeSnippet,
     Image,
     Audio,
-    SurfResource
+    SurfResource,
+    File,
+    Folder
 }

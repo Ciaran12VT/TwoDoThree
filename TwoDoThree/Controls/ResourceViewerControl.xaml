@@ -110,6 +110,10 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+
+        <DataTemplate x:Key="FileResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <controls:FileResourcePreviewControl Resource="{Binding}" />
+        </DataTemplate>
     </UserControl.Resources>
 
     <ContentControl Content="{Binding Resource, ElementName=Root}">
@@ -134,6 +138,12 @@
                     </DataTrigger>
                     <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.SurfResource}">
                         <Setter Property="ContentTemplate" Value="{StaticResource SurfResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.File}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource FileResourceTemplate}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.Folder}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource FileResourceTemplate}" />
                     </DataTrigger>
                 </Style.Triggers>
             </Style>

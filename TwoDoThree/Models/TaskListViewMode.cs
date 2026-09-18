@@ -4,5 +4,6 @@ public enum TaskListViewMode
 {
     Grid,
     TagBuckets,
-    StatusKanban
+    StatusKanban,
+    Priority
 }

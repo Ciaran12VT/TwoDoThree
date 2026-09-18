@@ -10,5 +10,6 @@ public enum TaskListColumn
     DueBy,
     CreatedOn,
     UpdatedOn,
-    TimeSpent
+    TimeSpent,
+    Priority
 }

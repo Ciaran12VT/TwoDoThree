@@ -173,6 +173,15 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="PriorityTaskViewVisibilityStyle" TargetType="{x:Type FrameworkElement}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsPriorityTaskView}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="TagTaskViewVisibilityStyle" TargetType="{x:Type FrameworkElement}">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
@@ -487,6 +496,14 @@
                         </ToggleButton>
                         <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
                                       Margin="6,0,0,0"
+                                      IsChecked="{Binding IsPriorityTaskView, Mode=TwoWay}"
+                                      ToolTip="Priority view">
+                            <TextBlock Text="&#xE8FD;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" />
+                        </ToggleButton>
+                        <ToggleButton Style="{StaticResource RoundTaskViewToggleStyle}"
+                                      Margin="6,0,0,0"
                                       IsChecked="{Binding IsTagBucketTaskView, Mode=TwoWay}"
                                       ToolTip="Tag bucket view">
                             <TextBlock Text="&#xE8EC;"
@@ -638,6 +655,7 @@
                         </DataGrid.CellStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn x:Name="TaskIdColumn" Header="ID" Width="70" Binding="{Binding Id}" />
+                            <DataGridTextColumn x:Name="TaskPriorityColumn" Header="Priority" Width="80" Binding="{Binding Priority}" />
                             <DataGridTextColumn x:Name="TaskTitleColumn" Header="Title" Width="2*" Binding="{Binding Title}" />
                             <DataGridTextColumn x:Name="TaskTagsColumn" Header="Tags" Width="*" Binding="{Binding Tags}" />
                             <DataGridTextColumn x:Name="TaskPocsColumn" Header="POCs" Width="*" Binding="{Binding Pocs}" />
@@ -666,6 +684,56 @@
                         </DataGrid.Columns>
                     </DataGrid>
                     </Grid>
+
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource PriorityTaskViewVisibilityStyle}">
+                        <Border Width="420"
+                                HorizontalAlignment="Left"
+                                MinHeight="180"
+                                Padding="10"
+                                Background="#F9FAFB"
+                                BorderBrush="{StaticResource MutedBorderBrush}"
+                                BorderThickness="1"
+                                AllowDrop="True"
+                                PreviewDragOver="PriorityTaskList_PreviewDragOver"
+                                Drop="PriorityTaskList_Drop">
+                            <StackPanel>
+                                <TextBlock Text="Priority (1 is highest)"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8" />
+                                <ItemsControl ItemsSource="{Binding PriorityTasks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,8"
+                                                    Padding="8"
+                                                    MinHeight="48"
+                                                    Background="{Binding Status, Converter={StaticResource TaskStatusToBackgroundConverter}}"
+                                                    BorderBrush="{StaticResource MutedBorderBrush}"
+                                                    BorderThickness="1"
+                                                    Cursor="Hand"
+                                                    PreviewMouseMove="TaskBoardCard_PreviewMouseMove"
+                                                    MouseLeftButtonDown="TaskBoardCard_MouseLeftButtonDown">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Left"
+                                                               Width="42"
+                                                               Text="{Binding Priority}"
+                                                               Foreground="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}"
+                                                               FontWeight="Bold" />
+                                                    <TextBlock Text="{Binding Title}"
+                                                               Foreground="{Binding Status, Converter={StaticResource TaskStatusToForegroundConverter}}"
+                                                               FontWeight="SemiBold"
+                                                               TextWrapping="Wrap"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
 
                     <ScrollViewer Grid.Row="1"
                                   HorizontalScrollBarVisibility="Auto"

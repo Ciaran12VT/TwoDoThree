@@ -192,7 +192,8 @@ public partial class CodeSnippetEditor : UserControl
     {
         Editor.SyntaxHighlighting = string.IsNullOrWhiteSpace(language)
             ? null
-            : HighlightingManager.Instance.GetDefinition(language);
+            : HighlightingManager.Instance.GetDefinition(
+                string.Equals(language, "SQL", StringComparison.OrdinalIgnoreCase) ? "TSQL" : language);
     }
 
     private sealed class ResourceLinkColorizer : DocumentColorizingTransformer

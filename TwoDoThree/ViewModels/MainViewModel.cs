@@ -62,6 +62,7 @@ public sealed class MainViewModel : ObservableObject
         TasksView = CollectionViewSource.GetDefaultView(Tasks);
         EmailsView.Filter = FilterEmail;
         TasksView.Filter = FilterTask;
+        TasksView.CollectionChanged += (_, _) => RefreshPriorityTasks();
         RefreshFilterSetChoices();
 
         taskPersistenceTimer = new DispatcherTimer
@@ -99,6 +100,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<TaskBucketViewModel> TagTaskBuckets { get; } = new();
 
     public ObservableCollection<TaskBucketViewModel> StatusTaskBuckets { get; } = new();
+
+    public ObservableCollection<TaskItem> PriorityTasks { get; } = new();
 
     public ObservableCollection<TaskFilterSet> FilterSetChoices { get; } = new();
 
@@ -168,6 +171,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref taskListViewMode, value))
             {
                 OnPropertyChanged(nameof(IsGridTaskView));
+                OnPropertyChanged(nameof(IsPriorityTaskView));
                 OnPropertyChanged(nameof(IsTagBucketTaskView));
                 OnPropertyChanged(nameof(IsStatusKanbanTaskView));
                 RefreshTaskBuckets();
@@ -183,6 +187,22 @@ public sealed class MainViewModel : ObservableObject
             if (value)
             {
                 TaskListViewMode = TaskListViewMode.Grid;
+            }
+            else
+            {
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool IsPriorityTaskView
+    {
+        get => TaskListViewMode == TaskListViewMode.Priority;
+        set
+        {
+            if (value)
+            {
+                TaskListViewMode = TaskListViewMode.Priority;
             }
             else
             {
@@ -305,6 +325,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        task.Priority = Tasks.Count + 1;
         AddTask(task);
         SelectedTask = task;
         TasksView.Refresh();
@@ -445,6 +466,7 @@ public sealed class MainViewModel : ObservableObject
         UnregisterTask(task);
         Tasks.RemoveAt(taskIndex);
         NormalizeTaskSortOrder();
+        NormalizeTaskPriority();
         RefreshEmailTaskAssociations();
         RefreshTaskBuckets();
         TasksView.Refresh();
@@ -493,6 +515,50 @@ public sealed class MainViewModel : ObservableObject
         SelectedTask = task;
         TasksView.Refresh();
         RefreshTaskBuckets();
+    }
+
+    public void MoveTaskPriority(TaskItem task, TaskItem? targetTask, bool insertAfter)
+    {
+        var globalTasks = Tasks.OrderBy(item => item.Priority).ThenBy(item => item.Id).ToList();
+        var visibleTasks = PriorityTasks.ToList();
+        var visibleSet = visibleTasks.ToHashSet();
+        var oldIndex = visibleTasks.IndexOf(task);
+        if (oldIndex < 0 || (targetTask is not null && !visibleSet.Contains(targetTask)))
+        {
+            return;
+        }
+
+        var newIndex = targetTask is null
+            ? visibleTasks.Count
+            : visibleTasks.IndexOf(targetTask) + (insertAfter ? 1 : 0);
+        if (oldIndex < newIndex)
+        {
+            newIndex--;
+        }
+
+        if (oldIndex == newIndex)
+        {
+            return;
+        }
+
+        visibleTasks.RemoveAt(oldIndex);
+        visibleTasks.Insert(newIndex, task);
+        var nextVisible = 0;
+        for (var index = 0; index < globalTasks.Count; index++)
+        {
+            if (visibleSet.Contains(globalTasks[index]))
+            {
+                globalTasks[index] = visibleTasks[nextVisible++];
+            }
+        }
+
+        for (var index = 0; index < globalTasks.Count; index++)
+        {
+            globalTasks[index].Priority = index + 1;
+        }
+
+        SelectedTask = task;
+        RefreshPriorityTasks();
     }
 
     public bool IsTaskVisibleInBucket(TaskBucketViewModel bucket, TaskItem task)
@@ -617,6 +683,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             nextTaskId = Tasks.Count == 0 ? 1001 : Tasks.Max(task => task.Id) + 1;
+            NormalizeTaskPriority();
             SelectedTask = Tasks.FirstOrDefault();
             TaskPersistenceStatus = $"Loaded {Tasks.Count} task{(Tasks.Count == 1 ? string.Empty : "s")} from SQL Server.";
             RefreshTaskBuckets();
@@ -775,6 +842,7 @@ public sealed class MainViewModel : ObservableObject
             Title = title,
             Tags = tags,
             SortOrder = Tasks.Count == 0 ? 0 : Tasks.Max(task => task.SortOrder) + 1,
+            Priority = Tasks.Count + 1,
             CreatedOn = now,
             UpdatedOn = now,
             TimeSpent = TimeSpan.Zero
@@ -1124,6 +1192,34 @@ public sealed class MainViewModel : ObservableObject
             }
 
             QueueTaskSave(task);
+        }
+    }
+
+    private void NormalizeTaskPriority()
+    {
+        var orderedTasks = Tasks.OrderBy(task => task.Priority).ThenBy(task => task.Id).ToList();
+        for (var index = 0; index < orderedTasks.Count; index++)
+        {
+            if (orderedTasks[index].Priority != index + 1)
+            {
+                orderedTasks[index].Priority = index + 1;
+            }
+        }
+
+        RefreshPriorityTasks();
+    }
+
+    private void RefreshPriorityTasks()
+    {
+        var visibleTasks = TasksView.Cast<TaskItem>()
+            .OrderBy(task => task.Priority)
+            .ThenBy(task => task.Id)
+            .ToList();
+
+        PriorityTasks.Clear();
+        foreach (var task in visibleTasks)
+        {
+            PriorityTasks.Add(task);
         }
     }
 

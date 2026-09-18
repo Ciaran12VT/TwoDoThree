@@ -28,6 +28,7 @@
                         <MenuItem Header="CSS" Tag="CSS" Click="LanguageMenuItem_Click" />
                         <MenuItem Header="JavaScript" Tag="JavaScript" Click="LanguageMenuItem_Click" />
                         <MenuItem Header="PowerShell" Tag="PowerShell" Click="LanguageMenuItem_Click" />
+                        <MenuItem Header="SQL" Tag="SQL" Click="LanguageMenuItem_Click" />
                         <MenuItem Header="C++" Tag="C++" Click="LanguageMenuItem_Click" />
                         <MenuItem Header="Java" Tag="Java" Click="LanguageMenuItem_Click" />
                         <MenuItem Header="PHP" Tag="PHP" Click="LanguageMenuItem_Click" />

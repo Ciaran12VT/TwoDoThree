@@ -139,7 +139,7 @@ public sealed class DatabaseExportService
                     connection,
                     "dbo.TwoDoThreeTasks",
                     """
-SELECT Id, Title, Tags, Pocs, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, SurfScopeId, SurfScopeName
+SELECT Id, Title, Tags, Pocs, Status, StatusBeforeActive, DueBy, CreatedOn, UpdatedOn, TimeSpentSeconds, SortOrder, Priority, SurfScopeId, SurfScopeName
 FROM dbo.TwoDoThreeTasks
 ORDER BY SortOrder, Id;
 """,
@@ -283,6 +283,8 @@ ORDER BY TaskId, OccurredOn, SortOrder;
                     break;
                 case ResourceKind.Image:
                 case ResourceKind.Audio:
+                case ResourceKind.File:
+                case ResourceKind.Folder:
                     ExportLocalPathResource(archive, usedEntryNames, resourcePath, resource.Content, manifest, cancellationToken);
                     break;
                 case ResourceKind.SurfResource:
@@ -541,6 +543,7 @@ ORDER BY TaskId, OccurredOn, SortOrder;
             "CSS" => ".css",
             "JavaScript" => ".js",
             "PowerShell" => ".ps1",
+            "SQL" => ".sql",
             "C++" => ".cpp",
             "Java" => ".java",
             "PHP" => ".php",

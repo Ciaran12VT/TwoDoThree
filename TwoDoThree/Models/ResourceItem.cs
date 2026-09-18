@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json.Serialization;
 using TwoDoThree.ViewModels;
 
 namespace TwoDoThree.Models;
@@ -91,4 +94,29 @@ public sealed class ResourceItem : ObservableObject
         SurfResourceLink.TryParse(Content, out SurfResourceLink link)
             ? link.DisplaySummary
             : Content;
+
+    [JsonIgnore]
+    public ObservableCollection<FileSystemResourceNode> FolderChildren { get; } = new();
+
+    [JsonIgnore]
+    public bool FolderChildrenLoaded { get; set; }
+
+    [JsonIgnore]
+    public string FileIcon => Kind switch
+    {
+        ResourceKind.Folder => "📁",
+        ResourceKind.File when Path.GetExtension(Content).Equals(".pdf", StringComparison.OrdinalIgnoreCase) => "PDF",
+        ResourceKind.File when Path.GetExtension(Content).Equals(".doc", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(Content).Equals(".docx", StringComparison.OrdinalIgnoreCase) => "W",
+        ResourceKind.File => "📄",
+        _ => string.Empty
+    };
+
+    [JsonIgnore]
+    public string FileIconColor => Path.GetExtension(Content).ToLowerInvariant() switch
+    {
+        ".pdf" => "#B91C1C",
+        ".doc" or ".docx" => "#1D4ED8",
+        _ => "#64748B"
+    };
 }

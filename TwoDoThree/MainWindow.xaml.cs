@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private static readonly IReadOnlyList<TaskListColumnOption> TaskListColumnOptions =
     [
         new(TaskListColumn.Id, "ID"),
+        new(TaskListColumn.Priority, "Priority"),
         new(TaskListColumn.Title, "Title"),
         new(TaskListColumn.Tags, "Tags"),
         new(TaskListColumn.Pocs, "POCs"),
@@ -334,6 +335,30 @@ public partial class MainWindow : Window
         var data = new DataObject();
         data.SetData(TaskDataFormat, task);
         DragDrop.DoDragDrop(card, data, DragDropEffects.Move);
+    }
+
+    private void PriorityTaskList_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = TryGetDraggedTask(e, out var task)
+                    && task is not null
+                    && ViewModel.PriorityTasks.Contains(task)
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void PriorityTaskList_Drop(object sender, DragEventArgs e)
+    {
+        if (!TryGetDraggedTask(e, out var task)
+            || task is null
+            || !ViewModel.PriorityTasks.Contains(task))
+        {
+            return;
+        }
+
+        var targetTask = GetTaskFromDropTarget(e.OriginalSource);
+        ViewModel.MoveTaskPriority(task, targetTask, ShouldInsertAfter(e, targetTask));
+        e.Handled = true;
     }
 
     private void TagTaskBucket_PreviewDragOver(object sender, DragEventArgs e)
@@ -658,6 +683,7 @@ public partial class MainWindow : Window
         return column switch
         {
             TaskListColumn.Id => TaskIdColumn,
+            TaskListColumn.Priority => TaskPriorityColumn,
             TaskListColumn.Title => TaskTitleColumn,
             TaskListColumn.Tags => TaskTagsColumn,
             TaskListColumn.Pocs => TaskPocsColumn,
@@ -1024,19 +1050,20 @@ public partial class MainWindow : Window
         return string.Join(
             Environment.NewLine,
             tasks.Select(task =>
-                $"{task.Id} - {task.Title} [{FormatStatus(task.Status)}] Tags: {task.Tags} POCs: {task.Pocs} Due By: {FormatDate(task.DueBy)} Created: {task.CreatedOn:g} Updated: {task.UpdatedOn:g} Time Spent: {task.TimeSpent}"));
+                $"{task.Id} - {task.Title} [Priority {task.Priority}] [{FormatStatus(task.Status)}] Tags: {task.Tags} POCs: {task.Pocs} Due By: {FormatDate(task.DueBy)} Created: {task.CreatedOn:g} Updated: {task.UpdatedOn:g} Time Spent: {task.TimeSpent}"));
     }
 
     private static string CreateTasksCsv(IEnumerable<TaskItem> tasks)
     {
         var lines = new List<string>
         {
-            "ID,Title,Tags,POCs,Status,DueBy,CreatedOn,UpdatedOn,TimeSpent"
+            "ID,Priority,Title,Tags,POCs,Status,DueBy,CreatedOn,UpdatedOn,TimeSpent"
         };
 
         lines.AddRange(tasks.Select(task => string.Join(
             ",",
             task.Id.ToString(),
+            task.Priority.ToString(),
             EscapeCsv(task.Title),
             EscapeCsv(task.Tags),
             EscapeCsv(task.Pocs),

@@ -542,6 +542,7 @@
                                 <TreeView x:Name="ResourceTree"
                                           Grid.Row="2"
                                           ItemsSource="{Binding ResourceGroups}"
+                                          SelectedItemChanged="ResourceTree_SelectedItemChanged"
                                           MouseDoubleClick="ResourceTree_MouseDoubleClick"
                                           PreviewMouseMove="ResourceTree_PreviewMouseMove"
                                           PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
@@ -558,9 +559,18 @@
                                         <HierarchicalDataTemplate DataType="{x:Type models:ResourceGroup}" ItemsSource="{Binding Resources}">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                         </HierarchicalDataTemplate>
-                                        <DataTemplate DataType="{x:Type models:ResourceItem}">
-                                            <TextBlock Text="{Binding Name}" />
-                                        </DataTemplate>
+                                        <HierarchicalDataTemplate DataType="{x:Type models:ResourceItem}" ItemsSource="{Binding FolderChildren}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding FileIcon}" Foreground="{Binding FileIconColor}" FontWeight="Bold" MinWidth="20" Margin="0,0,6,0" />
+                                                <TextBlock Text="{Binding Name}" />
+                                            </StackPanel>
+                                        </HierarchicalDataTemplate>
+                                        <HierarchicalDataTemplate DataType="{x:Type models:FileSystemResourceNode}" ItemsSource="{Binding Children}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontWeight="Bold" MinWidth="20" Margin="0,0,6,0" />
+                                                <TextBlock Text="{Binding Name}" />
+                                            </StackPanel>
+                                        </HierarchicalDataTemplate>
                                     </TreeView.Resources>
                                 </TreeView>
                             </Grid>
@@ -632,6 +642,18 @@
                                     <TextBlock Text="&#xE767;"
                                                FontFamily="Segoe MDL2 Assets"
                                                FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Add File"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddLinkedFileCommand}">
+                                    <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="Add Folder"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding AddLinkedFolderCommand}">
+                                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
                                 </Button>
                                 <Button Style="{StaticResource RoundIconButtonStyle}"
                                         ToolTip="Surf Resource"
