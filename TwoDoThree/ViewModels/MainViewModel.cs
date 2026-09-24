@@ -1307,6 +1307,11 @@ public sealed class MainViewModel : ObservableObject
 
     private void TaskResources_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.OldItems is not null)
+        {
+            foreach (ResourceItem resource in e.OldItems)
+                resource.PropertyChanged -= Resource_PropertyChanged;
+        }
         if (FindTaskForResourceCollection(sender) is { } task)
         {
             if (e.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Replace

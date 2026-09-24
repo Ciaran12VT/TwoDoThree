@@ -211,6 +211,19 @@ public sealed class TaskDetailViewModel : ObservableObject
         }
     }
 
+    public bool CanRemoveResourceFromTask(ResourceItem resource) => Task.Resources.Contains(resource);
+
+    public bool RemoveResourceFromTask(ResourceItem resource)
+    {
+        // Resources own their internal content; external resources contain links only.
+        // Removing this record persists through the existing task collection save handler.
+        // Never delete files, folder contents, emails or linked Surf resources here.
+        if (!Task.Resources.Remove(resource)) return false;
+        RefreshResourceGroups();
+        TouchTask();
+        return true;
+    }
+
     public async Task InitializeSurf2Async()
     {
         isInitializingSurfScope = true;

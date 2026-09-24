@@ -257,6 +257,8 @@ public partial class TaskDetailWindow : Window
         RemoveMakeGlobalResourceMenuItems();
 
         RenameResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem;
+        RemoveResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem selected
+            && DataContext is TaskDetailViewModel model && model.CanRemoveResourceFromTask(selected);
         if (ResourceTree.SelectedItem is not ResourceItem
             || DataContext is not TaskDetailViewModel viewModel)
         {
@@ -305,6 +307,20 @@ public partial class TaskDetailWindow : Window
             {
                 viewModel.RefreshResourceGroups(resource);
             }
+        }
+    }
+
+    private void RemoveResourceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResourceTree.SelectedItem is not ResourceItem resource
+            || DataContext is not TaskDetailViewModel viewModel
+            || !viewModel.RemoveResourceFromTask(resource)) return;
+
+        // Do not leave an editor open for a resource that is no longer stored on this task.
+        foreach (var window in OwnedWindows.OfType<ResourcePopoutWindow>()
+                     .Where(window => ReferenceEquals(window.Resource, resource)).ToList())
+        {
+            window.Close();
         }
     }
 

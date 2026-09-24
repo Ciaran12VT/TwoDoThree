@@ -20,6 +20,7 @@ public partial class FileResourcePreviewControl : UserControl
     private int previewVersion;
     private string? markdownDocumentId;
     private bool markdownNavigationPending;
+    private MarkdownTaskFile? markdownTaskFile;
 
     public static readonly DependencyProperty ResourceProperty = DependencyProperty.Register(
         nameof(Resource), typeof(ResourceItem), typeof(FileResourcePreviewControl),
@@ -49,6 +50,7 @@ public partial class FileResourcePreviewControl : UserControl
         var resource = Resource;
         var version = ++previewVersion;
         markdownDocumentId = null;
+        markdownTaskFile = null;
         markdownNavigationPending = false;
         MarkdownWebView.Visibility = Visibility.Collapsed;
         PdfWebView.Visibility = Visibility.Collapsed;
@@ -107,12 +109,18 @@ public partial class FileResourcePreviewControl : UserControl
                 return;
             }
 
-            var result = await Task.Run(() => extension == ".docx" ? ExtractWordText(path) : ReadTextPreview(path));
+            MarkdownTaskFile? taskFile = null;
+            var result = await Task.Run(() =>
+            {
+                if (extension is ".md" or ".markdown") taskFile = MarkdownTaskFile.Load(path, MaxPreviewBytes);
+                return taskFile?.Text ?? (extension == ".docx" ? ExtractWordText(path) : ReadTextPreview(path));
+            });
             if (version != previewVersion) return;
             PreviewTextBox.Text = result;
             if (extension is ".md" or ".markdown")
             {
-                await ShowMarkdownPreviewAsync(result, version);
+                markdownTaskFile = taskFile;
+                await ShowMarkdownPreviewAsync(result, version, taskFile is not null);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidDataException or XmlException or ArgumentException)
@@ -122,12 +130,12 @@ public partial class FileResourcePreviewControl : UserControl
         }
     }
 
-    private async Task ShowMarkdownPreviewAsync(string markdown, int version)
+    private async Task ShowMarkdownPreviewAsync(string markdown, int version, bool editableTasks)
     {
         try
         {
             var documentId = Guid.NewGuid().ToString("N");
-            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId));
+            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks));
             if (version != previewVersion) return;
             await MarkdownWebView.EnsureCoreWebView2Async();
             if (version != previewVersion) return;
@@ -187,14 +195,41 @@ public partial class FileResourcePreviewControl : UserControl
         }
     }
 
-    private void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private async void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         if (markdownDocumentId is null || MarkdownWebView.Visibility != Visibility.Visible
             || (e.Source != "about:blank" && !e.Source.StartsWith("about:blank#", StringComparison.Ordinal))) return;
         try
         {
-            var request = JsonSerializer.Deserialize<MarkdownCopyRequest>(e.WebMessageAsJson);
-            if (request is null || request.documentId != markdownDocumentId || request.text is null || request.id < 0) return;
+            var request = JsonSerializer.Deserialize<MarkdownPreviewRequest>(e.WebMessageAsJson);
+            if (request is null || request.documentId != markdownDocumentId) return;
+            if (request.action == "toggleTask")
+            {
+                var file = markdownTaskFile;
+                if (file is null || request.position is null || request.isChecked is null) return;
+                string? error = null;
+                try
+                {
+                    await Task.Run(() => file.SetChecked(request.position.Value, request.isChecked.Value));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+                {
+                    error = $"Task was not saved: {ex.Message}";
+                }
+                // A pending save belongs to the original document, even if selection changed meanwhile.
+                if (request.documentId != markdownDocumentId) return;
+                if (error is null)
+                {
+                    PreviewTextBox.Text = file.Text;
+                    DetailsBlock.Text = $"{Resource?.Content}\nTask saved to the original file.";
+                }
+                MarkdownWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+                {
+                    request.documentId, action = "toggleTask", success = error is null, error
+                }));
+                return;
+            }
+            if (request.action != "copy" || request.text is null || request.id < 0) return;
             bool success;
             try
             {
@@ -208,16 +243,16 @@ public partial class FileResourcePreviewControl : UserControl
             }
             MarkdownWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
             {
-                request.documentId, request.id, success
+                request.documentId, action = "copy", request.id, success
             }));
         }
         catch (JsonException)
         {
-            // Ignore messages that do not follow the preview's copy protocol.
+            // Ignore messages that do not follow the preview protocol.
         }
     }
 
-    private sealed record MarkdownCopyRequest(string? documentId, int id, string? text);
+    private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked);
 
     private static string ReadTextPreview(string path)
     {

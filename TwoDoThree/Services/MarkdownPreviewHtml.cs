@@ -1,4 +1,8 @@
 using Markdig;
+using Markdig.Extensions.TaskLists;
+using Markdig.Renderers;
+using Markdig.Renderers.Html;
+using Markdig.Syntax;
 
 namespace TwoDoThree.Services;
 
@@ -11,12 +15,39 @@ public static class MarkdownPreviewHtml
         .UsePipeTables()
         .UseTaskLists()
         .UseEmphasisExtras()
+        .UsePreciseSourceLocation()
         .DisableHtml()
         .Build();
 
-    public static string CreateDisplayDocument(string markdown, string documentId)
+    public static HashSet<int> GetTaskMarkerPositions(string markdown) => Markdown.Parse(markdown, Pipeline)
+        .Descendants<TaskList>().Select(task => task.Span.Start)
+        .Where(position => IsTaskMarker(markdown, position)).ToHashSet();
+
+    private static bool IsTaskMarker(string markdown, int position) => position >= 0
+        && position + 2 < markdown.Length && markdown[position] == '[' && markdown[position + 2] == ']'
+        && markdown[position + 1] is ' ' or 'x' or 'X';
+
+    private sealed class TaskRenderer(string markdown, bool editable) : HtmlObjectRenderer<TaskList>
     {
-        var body = Markdown.ToHtml(markdown, Pipeline);
+        protected override void Write(HtmlRenderer renderer, TaskList task)
+        {
+            var position = task.Span.Start;
+            renderer.Write("<input type=\"checkbox\" class=\"markdown-task\"");
+            if (task.Checked) renderer.Write(" checked");
+            if (!editable || !IsTaskMarker(markdown, position)) renderer.Write(" disabled");
+            renderer.Write(" data-position=\"").Write(position.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                .Write("\" aria-label=\"Toggle task\" />");
+        }
+    }
+
+    public static string CreateDisplayDocument(string markdown, string documentId, bool editableTasks = false)
+    {
+        using var writer = new System.IO.StringWriter();
+        var renderer = new HtmlRenderer(writer);
+        Pipeline.Setup(renderer);
+        renderer.ObjectRenderers.Insert(0, new TaskRenderer(markdown, editableTasks));
+        renderer.Render(Markdown.Parse(markdown, Pipeline));
+        var body = writer.ToString();
         var nonce = Guid.NewGuid().ToString("N");
         var documentIdJson = System.Text.Json.JsonSerializer.Serialize(documentId);
         return $$"""
@@ -45,13 +76,31 @@ pre code { padding: 0; background: transparent; }
 .copy-code { position: absolute; top: 7px; right: 7px; padding: 3px 10px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; color: #334155; font: 12px/1.6 'Segoe UI', sans-serif; cursor: pointer; }
 .copy-code:hover { background: #e2e8f0; }
 .copy-code:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.markdown-task:not(:disabled) { cursor: pointer; }
+#task-status { position: sticky; top: 0; background: white; color: #475569; }
+#task-status:empty { display: none; }
 </style>
 </head>
 <body>
+<div id="task-status" role="status" aria-live="polite"></div>
 {{body}}
 <script nonce="{{nonce}}">
 const documentId = {{documentIdJson}};
 const buttons = [];
+const tasks = Array.from(document.querySelectorAll('input.markdown-task:not(:disabled)'));
+const taskStatus = document.getElementById('task-status');
+let pendingTask = null;
+tasks.forEach(task => {
+    task.setAttribute('aria-label', 'Toggle task: ' + task.parentElement.textContent.trim());
+    task.addEventListener('change', () => {
+        if (pendingTask) return;
+        pendingTask = { task, previous: !task.checked };
+        tasks.forEach(input => input.disabled = true);
+        taskStatus.textContent = 'Saving task…';
+        window.chrome.webview.postMessage({ action: 'toggleTask', documentId,
+            position: Number(task.dataset.position), isChecked: task.checked });
+    });
+});
 document.querySelectorAll('pre > code').forEach((code, id) => {
     const pre = code.parentElement;
     const wrapper = document.createElement('div');
@@ -66,13 +115,21 @@ document.querySelectorAll('pre > code').forEach((code, id) => {
     button.setAttribute('aria-live', 'polite');
     button.addEventListener('click', () => {
         button.disabled = true;
-        window.chrome.webview.postMessage({ documentId, id, text: code.textContent });
+        window.chrome.webview.postMessage({ action: 'copy', documentId, id, text: code.textContent });
     });
     wrapper.append(button);
     buttons.push(button);
 });
 window.chrome.webview.addEventListener('message', ({ data }) => {
     if (data.documentId !== documentId) return;
+    if (data.action === 'toggleTask') {
+        if (!pendingTask) return;
+        if (!data.success) pendingTask.task.checked = pendingTask.previous;
+        tasks.forEach(input => input.disabled = false);
+        pendingTask = null;
+        taskStatus.textContent = data.success ? 'Task saved.' : (data.error || 'Could not save task.');
+        return;
+    }
     const button = buttons[data.id];
     if (!button) return;
     button.textContent = data.success ? 'Copied!' : 'Copy failed';

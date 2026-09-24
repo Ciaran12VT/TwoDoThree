@@ -553,6 +553,9 @@
                                             <MenuItem x:Name="RenameResourceMenuItem"
                                                       Header="Rename"
                                                       Click="RenameResourceMenuItem_Click" />
+                                            <MenuItem x:Name="RemoveResourceMenuItem"
+                                                      Header="Remove from task"
+                                                      Click="RemoveResourceMenuItem_Click" />
                                         </ContextMenu>
                                     </TreeView.ContextMenu>
                                     <TreeView.Resources>
