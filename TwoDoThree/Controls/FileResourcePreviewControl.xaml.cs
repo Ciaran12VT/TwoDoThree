@@ -1,11 +1,15 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Xml;
+using Microsoft.Web.WebView2.Core;
 using TwoDoThree.Models;
+using TwoDoThree.Services;
 
 namespace TwoDoThree.Controls;
 
@@ -14,6 +18,8 @@ public partial class FileResourcePreviewControl : UserControl
     private const int MaxPreviewBytes = 1024 * 1024;
     private const int MaxWordCharacters = 500_000;
     private int previewVersion;
+    private string? markdownDocumentId;
+    private bool markdownNavigationPending;
 
     public static readonly DependencyProperty ResourceProperty = DependencyProperty.Register(
         nameof(Resource), typeof(ResourceItem), typeof(FileResourcePreviewControl),
@@ -23,6 +29,8 @@ public partial class FileResourcePreviewControl : UserControl
     {
         InitializeComponent();
         Loaded += (_, _) => _ = LoadPreviewAsync();
+        MarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
+        MarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
     }
 
     public ResourceItem? Resource
@@ -40,12 +48,19 @@ public partial class FileResourcePreviewControl : UserControl
     {
         var resource = Resource;
         var version = ++previewVersion;
-        if (resource is null) return;
+        markdownDocumentId = null;
+        markdownNavigationPending = false;
+        MarkdownWebView.Visibility = Visibility.Collapsed;
+        PdfWebView.Visibility = Visibility.Collapsed;
+        PreviewTextBox.Visibility = Visibility.Visible;
+        if (resource is null)
+        {
+            NameBlock.Text = DetailsBlock.Text = PreviewTextBox.Text = string.Empty;
+            return;
+        }
 
         NameBlock.Text = resource.Name;
         var path = resource.Content;
-        PdfWebView.Visibility = Visibility.Collapsed;
-        PreviewTextBox.Visibility = Visibility.Visible;
         PreviewTextBox.Text = "Loading preview…";
         DetailsBlock.Text = path;
 
@@ -93,7 +108,12 @@ public partial class FileResourcePreviewControl : UserControl
             }
 
             var result = await Task.Run(() => extension == ".docx" ? ExtractWordText(path) : ReadTextPreview(path));
-            if (version == previewVersion) PreviewTextBox.Text = result;
+            if (version != previewVersion) return;
+            PreviewTextBox.Text = result;
+            if (extension is ".md" or ".markdown")
+            {
+                await ShowMarkdownPreviewAsync(result, version);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidDataException or XmlException or ArgumentException)
         {
@@ -101,6 +121,103 @@ public partial class FileResourcePreviewControl : UserControl
                 PreviewTextBox.Text = $"Preview is unavailable: {ex.Message}\nUse Open to view this file.";
         }
     }
+
+    private async Task ShowMarkdownPreviewAsync(string markdown, int version)
+    {
+        try
+        {
+            var documentId = Guid.NewGuid().ToString("N");
+            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId));
+            if (version != previewVersion) return;
+            await MarkdownWebView.EnsureCoreWebView2Async();
+            if (version != previewVersion) return;
+            markdownDocumentId = documentId;
+            markdownNavigationPending = true;
+            MarkdownWebView.NavigateToString(html);
+            MarkdownWebView.Visibility = Visibility.Visible;
+            PreviewTextBox.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception)
+        {
+            if (version != previewVersion) return;
+            markdownDocumentId = null;
+            markdownNavigationPending = false;
+            DetailsBlock.Text += "\nFormatted Markdown preview is unavailable. Showing plain text.";
+        }
+    }
+
+    private void MarkdownWebView_InitializationCompleted(object? sender, CoreWebView2InitializationCompletedEventArgs e)
+    {
+        if (!e.IsSuccess) return;
+        var core = MarkdownWebView.CoreWebView2;
+        core.Settings.AreDefaultScriptDialogsEnabled = false;
+        core.Settings.AreHostObjectsAllowed = false;
+        core.WebMessageReceived += MarkdownWebView_WebMessageReceived;
+        core.NewWindowRequested += (_, args) =>
+        {
+            args.Handled = true;
+            OpenMarkdownLink(args.Uri);
+        };
+    }
+
+    private void MarkdownWebView_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        // NavigateToString reports its initial navigation as a data URI on some runtimes.
+        if (markdownNavigationPending && !e.IsUserInitiated
+            && (e.Uri == "about:blank" || e.Uri.StartsWith("data:text/html;", StringComparison.Ordinal)))
+        {
+            markdownNavigationPending = false;
+            return;
+        }
+        if (e.Uri == "about:blank" || e.Uri.StartsWith("about:blank#", StringComparison.Ordinal)) return;
+        e.Cancel = true;
+        OpenMarkdownLink(e.Uri);
+    }
+
+    private static void OpenMarkdownLink(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http" or "mailto")) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // An unavailable external browser should not disrupt the preview.
+        }
+    }
+
+    private void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (markdownDocumentId is null || MarkdownWebView.Visibility != Visibility.Visible
+            || (e.Source != "about:blank" && !e.Source.StartsWith("about:blank#", StringComparison.Ordinal))) return;
+        try
+        {
+            var request = JsonSerializer.Deserialize<MarkdownCopyRequest>(e.WebMessageAsJson);
+            if (request is null || request.documentId != markdownDocumentId || request.text is null || request.id < 0) return;
+            bool success;
+            try
+            {
+                if (request.text.Length == 0) Clipboard.Clear();
+                else Clipboard.SetText(request.text);
+                success = true;
+            }
+            catch (ExternalException)
+            {
+                success = false;
+            }
+            MarkdownWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                request.documentId, request.id, success
+            }));
+        }
+        catch (JsonException)
+        {
+            // Ignore messages that do not follow the preview's copy protocol.
+        }
+    }
+
+    private sealed record MarkdownCopyRequest(string? documentId, int id, string? text);
 
     private static string ReadTextPreview(string path)
     {
