@@ -378,7 +378,9 @@
                                        Margin="0,2,0,8"
                                        Text="{Binding ReceivedOn, StringFormat='Received: {0:g}'}"
                                        Foreground="{StaticResource MutedTextBrush}" />
-                            <controls:EmailBodyViewer Grid.Row="3"
+                            <controls:EmailBodyViewer x:Name="MainEmailBodyViewer" Grid.Row="3"
+                                                      UseNativeRenderer="True"
+                                                      AllowDrop="False"
                                                       HtmlBody="{Binding HtmlBody}"
                                                       PlainText="{Binding Body}" />
                         </Grid>

@@ -1,13 +1,29 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using TwoDoThree.Services;
 
 namespace TwoDoThree.Controls;
 
 public partial class EmailBodyViewer : UserControl
 {
+    // MainWindow opts into native text rendering; task Resources retain composition
+    // so their ancestor can receive file drops over the browser surface.
+    public static readonly DependencyProperty UseNativeRendererProperty = DependencyProperty.Register(
+        nameof(UseNativeRenderer), typeof(bool), typeof(EmailBodyViewer),
+        new PropertyMetadata(false, OnRendererChanged));
+
+    public bool UseNativeRenderer
+    {
+        get => (bool)GetValue(UseNativeRendererProperty);
+        set => SetValue(UseNativeRendererProperty, value);
+    }
+
+    private IWebView2 EmailBrowser => UseNativeRenderer ? NativeBodyWebView : BodyWebView;
+
     public static readonly DependencyProperty HtmlBodyProperty =
         DependencyProperty.Register(
             nameof(HtmlBody),
@@ -28,9 +44,18 @@ public partial class EmailBodyViewer : UserControl
     public EmailBodyViewer()
     {
         InitializeComponent();
+        // Native and composition controllers cannot share the default environment.
+        // Keep this profile separate from Resources and from native Markdown.
+        NativeBodyWebView.CreationProperties = new CoreWebView2CreationProperties
+        {
+            UserDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "TwoDoThree", "WebView2", "NativeEmail")
+        };
         Loaded += EmailBodyViewer_Loaded;
         BodyWebView.NavigationStarting += BodyWebView_NavigationStarting;
         BodyWebView.CoreWebView2InitializationCompleted += BodyWebView_CoreWebView2InitializationCompleted;
+        NativeBodyWebView.NavigationStarting += BodyWebView_NavigationStarting;
+        NativeBodyWebView.CoreWebView2InitializationCompleted += BodyWebView_CoreWebView2InitializationCompleted;
     }
 
     public string HtmlBody
@@ -45,6 +70,18 @@ public partial class EmailBodyViewer : UserControl
         set => SetValue(PlainTextProperty, value);
     }
 
+    private static void OnRendererChanged(DependencyObject owner, DependencyPropertyChangedEventArgs e)
+    {
+        var viewer = (EmailBodyViewer)owner;
+        viewer.BodyWebView.AllowDrop = !viewer.UseNativeRenderer;
+        viewer.BodyWebView.Visibility = viewer.UseNativeRenderer ? Visibility.Collapsed : Visibility.Visible;
+        viewer.NativeBodyWebView.Visibility = viewer.UseNativeRenderer ? Visibility.Visible : Visibility.Collapsed;
+        viewer.FallbackTextBox.AllowDrop = !viewer.UseNativeRenderer;
+        viewer.isWebViewReady = viewer.EmailBrowser.CoreWebView2 is not null;
+        viewer.isWebViewUnavailable = false;
+        if (viewer.IsLoaded) viewer.EmailBodyViewer_Loaded(viewer, new RoutedEventArgs());
+    }
+
     private async void EmailBodyViewer_Loaded(object sender, RoutedEventArgs e)
     {
         if (isWebViewReady || isWebViewUnavailable)
@@ -55,7 +92,7 @@ public partial class EmailBodyViewer : UserControl
 
         try
         {
-            await BodyWebView.EnsureCoreWebView2Async();
+            await EmailBrowser.EnsureCoreWebView2Async();
         }
         catch (Exception)
         {
@@ -68,6 +105,7 @@ public partial class EmailBodyViewer : UserControl
         object? sender,
         CoreWebView2InitializationCompletedEventArgs e)
     {
+        if (!ReferenceEquals(sender, EmailBrowser)) return;
         if (!e.IsSuccess)
         {
             isWebViewUnavailable = true;
@@ -75,9 +113,9 @@ public partial class EmailBodyViewer : UserControl
             return;
         }
 
-        BodyWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
-        BodyWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-        BodyWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
+        EmailBrowser.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
+        EmailBrowser.CoreWebView2.Settings.AreDevToolsEnabled = false;
+        EmailBrowser.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
         isWebViewReady = true;
         RenderBody();
     }
@@ -121,14 +159,15 @@ public partial class EmailBodyViewer : UserControl
             return;
         }
 
-        BodyWebView.Visibility = Visibility.Visible;
+        ((FrameworkElement)EmailBrowser).Visibility = Visibility.Visible;
         FallbackTextBox.Visibility = Visibility.Collapsed;
-        BodyWebView.NavigateToString(EmailBodyHtml.CreateDisplayDocument(HtmlBody, PlainText));
+        EmailBrowser.NavigateToString(EmailBodyHtml.CreateDisplayDocument(HtmlBody, PlainText));
     }
 
     private void ShowFallback()
     {
         BodyWebView.Visibility = Visibility.Collapsed;
+        NativeBodyWebView.Visibility = Visibility.Collapsed;
         FallbackTextBox.Visibility = Visibility.Visible;
         FallbackTextBox.Text = string.IsNullOrWhiteSpace(PlainText)
             ? EmailBodyHtml.ToPlainText(HtmlBody)

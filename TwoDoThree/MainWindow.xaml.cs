@@ -47,7 +47,12 @@ public partial class MainWindow : Window
 
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
-    public MainWindow()
+    public MainWindow() : this(null)
+    {
+    }
+
+    // Allows actual-host checks with an isolated model instead of user mail/settings.
+    internal MainWindow(MainViewModel? initialViewModel)
     {
         InitializeComponent();
         settingsStore = new JsonAppSettingsStore();
@@ -60,9 +65,9 @@ public partial class MainWindow : Window
         var classicProvider = new ClassicOutlookEmailProvider(emailCacheStore);
         var emailProvider = new CompositeEmailProvider(graphProvider, classicProvider, emailCacheStore);
         var emailImportService = new EmailImportService();
-        var settings = settingsStore.Load();
+        var settings = initialViewModel?.Settings ?? settingsStore.Load();
         var taskStore = new SqlServerTaskStore(settings.Database);
-        DataContext = new MainViewModel(settings, emailProvider, emailImportService, emailCacheStore, taskStore);
+        DataContext = initialViewModel ?? new MainViewModel(settings, emailProvider, emailImportService, emailCacheStore, taskStore);
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
     }
