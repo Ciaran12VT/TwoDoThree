@@ -1,91 +1,157 @@
+using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Threading;
 using TwoDoThree.Models;
+using TwoDoThree.Services;
 using TwoDoThree.ViewModels;
 
 namespace TwoDoThree.Tests;
 
 public class ResourceRemovalTests
 {
-    public static IEnumerable<object[]> ResourceKinds => Enum.GetValues<ResourceKind>().Select(kind => new object[] { kind });
+    public static IEnumerable<object[]> ResourceKinds =>
+        Enum.GetValues<ResourceKind>().Select(kind => new object[] { kind });
 
     [Theory]
     [MemberData(nameof(ResourceKinds))]
-    public void RemovesEveryAttachedKindAndSelectsRemainingResource(ResourceKind kind)
+    public void RemovalUpdatesTreeSelectionAndPersistsWithoutResource(ResourceKind kind)
     {
-        var removed = new ResourceItem { Kind = kind, Content = "unique internally stored content", FormattedContent = "unique rich text" };
-        var remaining = new ResourceItem { Kind = ResourceKind.Text, Name = "Keep" };
-        var task = new TaskItem();
-        task.Resources.Add(removed);
-        task.Resources.Add(remaining);
-        var model = Create(task);
-        model.SelectedResource = removed;
+        RunOnStaThread(() =>
+        {
+            var removed = new ResourceItem
+            {
+                Name = "Remove me", Kind = kind, Content = "stored content", FormattedContent = "stored formatting"
+            };
+            var retained = new ResourceItem { Name = "Keep me", Kind = ResourceKind.Text, Content = "keep this" };
+            var task = new TaskItem { Id = 1 };
+            task.Resources.Add(removed);
+            task.Resources.Add(retained);
+            var store = new SnapshotTaskStore(task);
+            var main = new MainViewModel(new AppSettings(), new EmptyEmailProvider(), null!, null!, store);
+            main.FlushPendingTaskSaves();
+            store.Snapshot = null;
+            var detail = CreateDetail(task);
+            detail.SelectedResource = removed;
 
-        Assert.True(model.CanRemoveResourceFromTask(removed));
-        Assert.True(model.RemoveResourceFromTask(removed));
-        Assert.Same(remaining, Assert.Single(task.Resources));
-        Assert.Same(remaining, model.SelectedResource);
-        Assert.DoesNotContain(removed, model.ResourceGroups.SelectMany(group => group.Resources));
-        // Internal content is owned by the removed record, and no longer belongs to saved task data.
-        Assert.DoesNotContain("unique internally stored content", JsonSerializer.Serialize(task));
-        Assert.DoesNotContain("unique rich text", JsonSerializer.Serialize(task));
-        Assert.False(model.RemoveResourceFromTask(removed));
+            Assert.True(detail.CanRemoveResourceFromTask(removed));
+            Assert.True(detail.RemoveResourceFromTask(removed));
+            Assert.Same(retained, Assert.Single(task.Resources));
+            Assert.DoesNotContain(removed, detail.ResourceGroups.SelectMany(group => group.Resources));
+            Assert.Same(retained, detail.SelectedResource);
+
+            main.FlushPendingTaskSaves();
+            Assert.NotNull(store.Snapshot);
+            using var savedTask = JsonDocument.Parse(store.Snapshot);
+            var savedResource = Assert.Single(savedTask.RootElement.GetProperty("Resources").EnumerateArray());
+            Assert.Equal(retained.Id, savedResource.GetProperty("Id").GetGuid());
+            Assert.DoesNotContain("stored content", store.Snapshot);
+            Assert.DoesNotContain("stored formatting", store.Snapshot);
+            Assert.False(detail.RemoveResourceFromTask(removed));
+        });
     }
 
-    [Fact]
-    public void RemovingLastResourceClearsPreview()
+    [Theory]
+    [InlineData(ResourceKind.File)]
+    [InlineData(ResourceKind.Folder)]
+    [InlineData(ResourceKind.Image)]
+    [InlineData(ResourceKind.Audio)]
+    public void RemovalLeavesExternalFilesAndFolderContentsUntouched(ResourceKind kind)
     {
-        var resource = new ResourceItem();
-        var task = new TaskItem();
-        task.Resources.Add(resource);
-        var model = Create(task);
-        Assert.True(model.RemoveResourceFromTask(resource));
-        Assert.Null(model.SelectedResource);
-        Assert.Empty(task.Resources);
-    }
-
-    [Fact]
-    public void OtherTasksAndGlobalResourcesCannotBeRemovedThroughCurrentTask()
-    {
-        var task = new TaskItem { Tags = "review" };
-        var other = new TaskItem { Tags = "review" };
-        var resource = new ResourceItem { Content = "keep this shared content" };
-        other.Resources.Add(resource);
-        var global = new TagResourceCollection { Tag = "review" };
-        global.Resources.Add(resource);
-        var model = Create(task, [task, other], [global]);
-        model.SelectedResourceScope = ResourceScopeOption.ForTagAll("review");
-        model.RefreshResourceGroups();
-        Assert.False(model.CanRemoveResourceFromTask(resource));
-        Assert.False(model.RemoveResourceFromTask(resource));
-        model.SelectedResourceScope = ResourceScopeOption.ForTagGlobal("review");
-        Assert.False(model.RemoveResourceFromTask(resource));
-        Assert.Same(resource, Assert.Single(other.Resources));
-        Assert.Same(resource, Assert.Single(global.Resources));
-        Assert.Equal("keep this shared content", resource.Content);
-    }
-
-    [Fact]
-    public void RemovingLinkedFileAndFolderPreservesExternalContents()
-    {
-        var path = Path.GetTempFileName();
+        var directory = Directory.CreateTempSubdirectory("2do3-resource-removal-");
+        var path = Path.Combine(directory.FullName, "original.dat");
+        byte[] content = [0, 1, 2, 255];
+        File.WriteAllBytes(path, content);
         try
         {
-            File.WriteAllText(path, "external file must remain unchanged");
+            var resource = new ResourceItem
+            {
+                Kind = kind, Content = kind == ResourceKind.Folder ? directory.FullName : path
+            };
             var task = new TaskItem();
-            var file = new ResourceItem { Kind = ResourceKind.File, Content = path };
-            var folder = new ResourceItem { Kind = ResourceKind.Folder, Content = Path.GetDirectoryName(path)! };
-            task.Resources.Add(file);
-            task.Resources.Add(folder);
-            var model = Create(task);
-            Assert.True(model.RemoveResourceFromTask(file));
-            Assert.True(model.RemoveResourceFromTask(folder));
-            Assert.True(Directory.Exists(folder.Content));
-            Assert.Equal("external file must remain unchanged", File.ReadAllText(path));
+            task.Resources.Add(resource);
+            var detail = CreateDetail(task);
+
+            Assert.True(detail.RemoveResourceFromTask(resource));
+
+            Assert.Empty(task.Resources);
+            Assert.Null(detail.SelectedResource);
+            Assert.True(Directory.Exists(directory.FullName));
+            Assert.Equal(content, File.ReadAllBytes(path));
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+            directory.Delete();
+        }
     }
 
-    private static TaskDetailViewModel Create(TaskItem task, IEnumerable<TaskItem>? tasks = null,
-        IEnumerable<TagResourceCollection>? globals = null) => new(task, tasks ?? [task], globals ?? [],
-            (_, _) => null, new TagSettings(), new Surf2IntegrationSettings(), null!, null!);
+    [Fact]
+    public void SharedScopeOnlyAllowsRemovalOfCurrentTasksResources()
+    {
+        var task = new TaskItem { Id = 1, Tags = "Shared" };
+        var otherTask = new TaskItem { Id = 2, Tags = "Shared" };
+        var own = new ResourceItem { Kind = ResourceKind.Text, Content = "own text" };
+        var other = new ResourceItem { Kind = ResourceKind.Text, Content = "other text" };
+        var global = new ResourceItem { Kind = ResourceKind.Text, Content = "global text" };
+        task.Resources.Add(own);
+        otherTask.Resources.Add(other);
+        var globals = new TagResourceCollection { Tag = "Shared" };
+        globals.Resources.Add(global);
+        var detail = CreateDetail(task, [task, otherTask], [globals]);
+        detail.SelectedResourceScope = ResourceScopeOption.ForTagAll("Shared");
+        detail.RefreshResourceGroups();
+
+        Assert.False(detail.CanRemoveResourceFromTask(other));
+        Assert.False(detail.RemoveResourceFromTask(other));
+        Assert.True(detail.RemoveResourceFromTask(own));
+        Assert.Same(other, Assert.Single(otherTask.Resources));
+
+        detail.SelectedResourceScope = ResourceScopeOption.ForTagGlobal("Shared");
+        detail.RefreshResourceGroups();
+        Assert.False(detail.CanRemoveResourceFromTask(global));
+        Assert.False(detail.RemoveResourceFromTask(global));
+        Assert.Same(global, Assert.Single(globals.Resources));
+        Assert.Equal("global text", global.Content);
+    }
+
+    private static TaskDetailViewModel CreateDetail(
+        TaskItem task, IEnumerable<TaskItem>? tasks = null, IEnumerable<TagResourceCollection>? globals = null) =>
+        new(task, tasks ?? [task], globals ?? [], (_, _) => null, new TagSettings(),
+            new Surf2IntegrationSettings(), new Surf2IntegrationService(), new Surf2Launcher());
+
+    private static void RunOnStaThread(Action action)
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try { action(); }
+            catch (Exception exception) { failure = exception; }
+            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private sealed class SnapshotTaskStore(TaskItem task) : ITaskStore
+    {
+        public string? Snapshot { get; set; }
+        public bool IsConfigured => true;
+        public IReadOnlyList<TaskItem> LoadTasks() => [task];
+        public IReadOnlyList<TagResourceCollection> LoadTagResources() => [];
+        public void SaveTask(TaskItem savedTask) => Snapshot = JsonSerializer.Serialize(savedTask);
+        public void SaveTagResource(string tag, ResourceItem resource, int sortOrder) => throw new NotSupportedException();
+        public void DeleteTask(int taskId) => throw new NotSupportedException();
+    }
+
+    private sealed class EmptyEmailProvider : IEmailProvider
+    {
+        public IReadOnlyList<EmailMessage> LoadCachedMessages() => [];
+        public Task<EmailSyncResult> RefreshInboxAsync(
+            EmailSettings settings, bool allowInteractiveSignIn, Window? owner, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
 }

@@ -291,7 +291,9 @@
             </Grid>
         </Border>
 
-        <DockPanel Grid.Row="1" Margin="0,0,0,8">
+        <DockPanel x:Name="ResourcesHeader" Grid.Row="1" Margin="0,0,0,8" Background="Transparent"
+                   AllowDrop="True" PreviewDragEnter="Resources_PreviewDragOver"
+                   PreviewDragOver="Resources_PreviewDragOver" PreviewDrop="Resources_PreviewDrop">
             <StackPanel DockPanel.Dock="Right"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right"
@@ -327,6 +329,10 @@
 
         <Expander Grid.Row="2"
                   Header="Resources"
+                  AllowDrop="True"
+                  PreviewDragEnter="Resources_PreviewDragOver"
+                  PreviewDragOver="Resources_PreviewDragOver"
+                  PreviewDrop="Resources_PreviewDrop"
                   IsExpanded="True"
                   Expanded="ResourcesExpander_Expanded"
                   Collapsed="ResourcesExpander_Collapsed"
@@ -544,12 +550,18 @@
                                           ItemsSource="{Binding ResourceGroups}"
                                           SelectedItemChanged="ResourceTree_SelectedItemChanged"
                                           MouseDoubleClick="ResourceTree_MouseDoubleClick"
+                                          PreviewMouseLeftButtonDown="ResourceTree_PreviewMouseLeftButtonDown"
                                           PreviewMouseMove="ResourceTree_PreviewMouseMove"
                                           PreviewMouseRightButtonDown="ResourceTree_PreviewMouseRightButtonDown"
                                           ContextMenuOpening="ResourceTree_ContextMenuOpening"
                                           BorderThickness="0">
                                     <TreeView.ContextMenu>
                                         <ContextMenu>
+                                            <MenuItem Header="New virtual folder" Click="NewVirtualFolderMenuItem_Click" />
+                                            <MenuItem x:Name="NewVirtualFolderInsideMenuItem" Header="New virtual folder inside"
+                                                      Click="NewVirtualFolderInsideMenuItem_Click" />
+                                            <MenuItem x:Name="MoveToVirtualFolderMenuItem" Header="Move to virtual folder" />
+                                            <Separator />
                                             <MenuItem x:Name="RenameResourceMenuItem"
                                                       Header="Rename"
                                                       Click="RenameResourceMenuItem_Click" />
@@ -562,12 +574,45 @@
                                         <HierarchicalDataTemplate DataType="{x:Type models:ResourceGroup}" ItemsSource="{Binding Resources}">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                         </HierarchicalDataTemplate>
-                                        <HierarchicalDataTemplate DataType="{x:Type models:ResourceItem}" ItemsSource="{Binding FolderChildren}">
+                                        <HierarchicalDataTemplate DataType="{x:Type models:ResourceItem}" ItemsSource="{Binding TreeChildren}">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding FileIcon}" Foreground="{Binding FileIconColor}" FontWeight="Bold" MinWidth="20" Margin="0,0,6,0" />
+                                                <Path Data="{Binding FolderIconGeometry}" Stroke="{Binding FileIconColor}"
+                                                      StrokeThickness="1.4" Width="18" Height="16" Stretch="Uniform" Margin="0,0,8,0">
+                                                    <Path.Style>
+                                                        <Style TargetType="Path">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsFolderIcon}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Path.Style>
+                                                </Path>
+                                                <TextBlock Text="{Binding FileIcon}" Foreground="{Binding FileIconColor}" FontWeight="Bold" MinWidth="20" Margin="0,0,6,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsFolderIcon}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <TextBlock Text="{Binding Name}" />
                                             </StackPanel>
                                         </HierarchicalDataTemplate>
+                                        <Style TargetType="TreeViewItem">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsFileTreeResource}" Value="True">
+                                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="{x:Static models:ResourceKind.File}">
+                                                    <Setter Property="IsExpanded" Value="True" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
                                         <HierarchicalDataTemplate DataType="{x:Type models:FileSystemResourceNode}" ItemsSource="{Binding Children}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontWeight="Bold" MinWidth="20" Margin="0,0,6,0" />
@@ -657,6 +702,12 @@
                                         Margin="0,6,0,0"
                                         Command="{Binding AddLinkedFolderCommand}">
                                     <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource RoundIconButtonStyle}"
+                                        ToolTip="New virtual folder"
+                                        Margin="0,6,0,0"
+                                        Click="NewVirtualFolderMenuItem_Click">
+                                    <TextBlock Text="&#xE8F4;" Foreground="#C2410C" FontFamily="Segoe MDL2 Assets" FontSize="14" />
                                 </Button>
                                 <Button Style="{StaticResource RoundIconButtonStyle}"
                                         ToolTip="Surf Resource"

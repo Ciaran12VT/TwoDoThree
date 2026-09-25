@@ -9,9 +9,14 @@ public partial class RenameResourceWindow : Window, INotifyPropertyChanged
 {
     private string resourceName;
 
-    public RenameResourceWindow(string currentName)
+    public RenameResourceWindow(string currentName, bool creatingVirtualFolder = false)
     {
         InitializeComponent();
+        if (creatingVirtualFolder)
+        {
+            Title = "New virtual folder";
+            AcceptButton.Content = "Create";
+        }
         resourceName = currentName;
         DataContext = this;
         Loaded += (_, _) =>

@@ -56,7 +56,7 @@ public sealed class TaskDetailViewModel : ObservableObject
         AddLinkedFileCommand = new RelayCommand(_ => AddLinkedFile());
         AddLinkedFolderCommand = new RelayCommand(_ => AddLinkedFolder());
         AddSurfResourceCommand = new RelayCommand(async _ => await AddSurfResourceAsync(), _ => CanAddSurfResource);
-        SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null and { Kind: not ResourceKind.Folder });
+        SaveSelectedResourceCommand = new RelayCommand(_ => SaveSelectedResource(), _ => SelectedResource is not null and { Kind: not ResourceKind.Folder and not ResourceKind.VirtualFolder });
         AddActionCommand = new RelayCommand(_ => AddAction());
         RefreshSurfScopesCommand = new RelayCommand(async _ => await InitializeSurf2Async());
         RefreshResourceScopeCommand = new RelayCommand(_ => RefreshResourceGroups());
@@ -198,6 +198,7 @@ public sealed class TaskDetailViewModel : ObservableObject
 
     public void MakeResourceGlobalForTag(ResourceItem resource, string tag)
     {
+        if (resource.Kind == ResourceKind.VirtualFolder) return;
         var globalResource = makeResourceGlobal(tag, resource);
         if (globalResource is null)
         {
@@ -218,10 +219,122 @@ public sealed class TaskDetailViewModel : ObservableObject
         // Resources own their internal content; external resources contain links only.
         // Removing this record persists through the existing task collection save handler.
         // Never delete files, folder contents, emails or linked Surf resources here.
-        if (!Task.Resources.Remove(resource)) return false;
+        if (!Task.Resources.Contains(resource)) return false;
+        if (resource.Kind == ResourceKind.VirtualFolder)
+        {
+            // Disband the group, as in Surf, retaining its resources and nested groups.
+            var parent = Task.Resources.FirstOrDefault(item => item.Id == resource.ParentVirtualFolderId);
+            foreach (var child in Task.Resources.Where(item => item.ParentVirtualFolderId == resource.Id).ToList())
+                SetResourceParent(child, parent);
+        }
+        SetResourceParent(resource, null);
+        Task.Resources.Remove(resource);
         RefreshResourceGroups();
         TouchTask();
         return true;
+    }
+
+    public ResourceItem? CreateVirtualFolder(string name, ResourceItem? parent = null)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !IsValidVirtualFolderTarget(parent)) return null;
+        var folder = new ResourceItem
+        {
+            Name = CreateUniqueResourceName(name.Trim()), Kind = ResourceKind.VirtualFolder,
+            ParentVirtualFolderId = parent?.Id, IsExpanded = true
+        };
+        Task.Resources.Add(folder);
+        new VirtualFolderData().Save(folder);
+        SetResourceParent(folder, parent);
+        RevealFileResource(folder);
+        return folder;
+    }
+
+    private bool IsValidVirtualFolderTarget(ResourceItem? folder) =>
+        folder is null || folder.Kind == ResourceKind.VirtualFolder && Task.Resources.Contains(folder);
+
+    public bool CanMoveResource(ResourceItem resource, ResourceItem? folder)
+    {
+        if (!resource.IsFileTreeResource || !Task.Resources.Contains(resource) || !IsValidVirtualFolderTarget(folder))
+            return false;
+        var seen = new HashSet<Guid> { resource.Id };
+        for (var current = folder; current is not null;
+             current = Task.Resources.FirstOrDefault(item => item.Id == current.ParentVirtualFolderId))
+        {
+            if (!seen.Add(current.Id)) return false;
+        }
+        return true;
+    }
+
+    public bool MoveResource(ResourceItem resource, ResourceItem? folder)
+    {
+        if (!CanMoveResource(resource, folder)) return false;
+        SetResourceParent(resource, folder);
+        RevealFileResource(resource);
+        return true;
+    }
+
+    private void SetResourceParent(ResourceItem resource, ResourceItem? parent)
+    {
+        foreach (var folder in Task.Resources.Where(item => item.Kind == ResourceKind.VirtualFolder))
+        {
+            var data = VirtualFolderData.Read(folder);
+            var changed = data.ChildResourceIds.RemoveAll(id => id == resource.Id) > 0;
+            if (ReferenceEquals(folder, parent))
+            {
+                data.ChildResourceIds.Add(resource.Id);
+                changed = true;
+            }
+            if (changed) data.Save(folder);
+        }
+        resource.ParentVirtualFolderId = parent?.Id;
+    }
+
+    public IReadOnlyList<ResourceItem> AddLocalPaths(IEnumerable<string> paths, ResourceItem? folder = null)
+    {
+        if (!IsValidVirtualFolderTarget(folder)) return [];
+        var added = new List<ResourceItem>();
+        foreach (var input in paths)
+        {
+            if (string.IsNullOrWhiteSpace(input) || !Path.IsPathFullyQualified(input)) continue;
+            string path;
+            try { path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(input)); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+            var isFolder = Directory.Exists(path);
+            if (!isFolder && !File.Exists(path)) continue;
+            var kind = isFolder ? ResourceKind.Folder : ResourceKind.File;
+            var resource = Task.Resources.FirstOrDefault(item => item.Kind == kind
+                && string.Equals(Path.TrimEndingDirectorySeparator(item.Content), path, StringComparison.OrdinalIgnoreCase));
+            if (resource is null)
+            {
+                resource = new ResourceItem
+                {
+                    Name = Path.GetFileName(path) is { Length: > 0 } fileName ? fileName : path,
+                    Kind = kind, Content = path, ParentVirtualFolderId = folder?.Id
+                };
+                Task.Resources.Add(resource);
+                SetResourceParent(resource, folder);
+            }
+            else if (folder is not null) SetResourceParent(resource, folder);
+            if (!added.Contains(resource)) added.Add(resource);
+        }
+        if (added.Count > 0) RevealFileResource(added[^1]);
+        return added;
+    }
+
+    private void RevealFileResource(ResourceItem resource)
+    {
+        SelectedResourceScope = ResourceScopeOption.ThisTask;
+        ResourceSearchText = string.Empty;
+        var seen = new HashSet<Guid>();
+        var parentId = resource.ParentVirtualFolderId;
+        while (parentId is Guid id && seen.Add(id)
+               && Task.Resources.FirstOrDefault(item => item.Id == id) is { } parent)
+        {
+            parent.IsExpanded = true;
+            parentId = parent.ParentVirtualFolderId;
+        }
+        RefreshResourceGroups(resource);
+        TouchTask();
     }
 
     public async Task InitializeSurf2Async()
@@ -898,18 +1011,19 @@ public sealed class TaskDetailViewModel : ObservableObject
         var filter = ResourceSearchText.Trim();
         var sourceResources = GetResourceScopeResources().ToList();
 
-        foreach (var kind in Enum.GetValues<ResourceKind>().Where(kind => kind != ResourceKind.Folder))
+        foreach (var folder in sourceResources.Where(resource => resource.Kind == ResourceKind.Folder
+                     && !resource.FolderChildrenLoaded && resource.FolderChildren.Count == 0))
+            folder.FolderChildren.Add(FileSystemResourceNode.CreatePlaceholder());
+
+        foreach (var kind in Enum.GetValues<ResourceKind>().Where(kind => kind is not ResourceKind.Folder and not ResourceKind.VirtualFolder))
         {
             var group = new ResourceGroup(kind);
-            foreach (var resource in sourceResources.Where(resource =>
-                         (resource.Kind == kind || kind == ResourceKind.File && resource.Kind == ResourceKind.Folder)
+            var resources = kind == ResourceKind.File ? ResourceHierarchy.Build(sourceResources, filter)
+                : sourceResources.Where(resource => resource.Kind == kind
                          && (string.IsNullOrWhiteSpace(filter)
-                             || resource.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))))
+                             || resource.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)));
+            foreach (var resource in resources)
             {
-                if (resource.Kind == ResourceKind.Folder && !resource.FolderChildrenLoaded && resource.FolderChildren.Count == 0)
-                {
-                    resource.FolderChildren.Add(FileSystemResourceNode.CreatePlaceholder());
-                }
                 group.Resources.Add(resource);
             }
 

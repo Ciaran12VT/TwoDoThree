@@ -11,6 +11,8 @@
         <DockPanel Margin="0,0,0,5">
             <Button x:Name="OpenButton" DockPanel.Dock="Right" Content="Open" Padding="14,5"
                     Margin="8,0,0,0" Click="OpenButton_Click" />
+            <Button x:Name="EditMarkdownButton" DockPanel.Dock="Right" Content="Edit" Padding="14,5"
+                    Margin="8,0,0,0" Visibility="Collapsed" Click="EditMarkdownButton_Click" />
             <TextBlock x:Name="NameBlock" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
         </DockPanel>
         <TextBlock x:Name="DetailsBlock" Grid.Row="1" Margin="0,0,0,9" TextWrapping="Wrap"
@@ -19,8 +21,8 @@
             <TextBox x:Name="PreviewTextBox" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                      BorderThickness="0" Background="Transparent" />
-            <wv2:WebView2 x:Name="PdfWebView" Visibility="Collapsed" />
-            <wv2:WebView2 x:Name="MarkdownWebView" Visibility="Collapsed" />
+            <wv2:WebView2CompositionControl x:Name="PdfWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
+            <wv2:WebView2CompositionControl x:Name="MarkdownWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
         </Grid>
     </Grid>
 </UserControl>

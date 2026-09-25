@@ -10,6 +10,7 @@ using System.Xml;
 using Microsoft.Web.WebView2.Core;
 using TwoDoThree.Models;
 using TwoDoThree.Services;
+using TwoDoThree.Views;
 
 namespace TwoDoThree.Controls;
 
@@ -21,6 +22,8 @@ public partial class FileResourcePreviewControl : UserControl
     private string? markdownDocumentId;
     private bool markdownNavigationPending;
     private MarkdownTaskFile? markdownTaskFile;
+    private Task? markdownTaskSave;
+    private bool markdownEditorOpen;
 
     public static readonly DependencyProperty ResourceProperty = DependencyProperty.Register(
         nameof(Resource), typeof(ResourceItem), typeof(FileResourcePreviewControl),
@@ -51,6 +54,7 @@ public partial class FileResourcePreviewControl : UserControl
         var version = ++previewVersion;
         markdownDocumentId = null;
         markdownTaskFile = null;
+        EditMarkdownButton.Visibility = Visibility.Collapsed;
         markdownNavigationPending = false;
         MarkdownWebView.Visibility = Visibility.Collapsed;
         PdfWebView.Visibility = Visibility.Collapsed;
@@ -89,6 +93,8 @@ public partial class FileResourcePreviewControl : UserControl
             {
                 try
                 {
+                    // Composition controls need a laid-out template before initialization.
+                    PdfWebView.Visibility = Visibility.Visible;
                     await PdfWebView.EnsureCoreWebView2Async();
                     if (version != previewVersion) return;
                     PdfWebView.Source = new Uri(path);
@@ -98,7 +104,10 @@ public partial class FileResourcePreviewControl : UserControl
                 catch (Exception)
                 {
                     if (version == previewVersion)
+                    {
+                        PdfWebView.Visibility = Visibility.Collapsed;
                         PreviewTextBox.Text = "PDF preview is unavailable. Use Open to view this file.";
+                    }
                 }
                 return;
             }
@@ -120,6 +129,11 @@ public partial class FileResourcePreviewControl : UserControl
             if (extension is ".md" or ".markdown")
             {
                 markdownTaskFile = taskFile;
+                EditMarkdownButton.Visibility = Visibility.Visible;
+                EditMarkdownButton.IsEnabled = taskFile is not null;
+                EditMarkdownButton.ToolTip = taskFile is null
+                    ? "Editing is unavailable for truncated or unsupported text. Use Open to edit externally."
+                    : "Edit the Markdown source and save to the original file";
                 await ShowMarkdownPreviewAsync(result, version, taskFile is not null);
             }
         }
@@ -137,6 +151,7 @@ public partial class FileResourcePreviewControl : UserControl
             var documentId = Guid.NewGuid().ToString("N");
             var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks));
             if (version != previewVersion) return;
+            MarkdownWebView.Visibility = Visibility.Visible;
             await MarkdownWebView.EnsureCoreWebView2Async();
             if (version != previewVersion) return;
             markdownDocumentId = documentId;
@@ -148,6 +163,7 @@ public partial class FileResourcePreviewControl : UserControl
         catch (Exception)
         {
             if (version != previewVersion) return;
+            MarkdownWebView.Visibility = Visibility.Collapsed;
             markdownDocumentId = null;
             markdownNavigationPending = false;
             DetailsBlock.Text += "\nFormatted Markdown preview is unavailable. Showing plain text.";
@@ -197,7 +213,7 @@ public partial class FileResourcePreviewControl : UserControl
 
     private async void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (markdownDocumentId is null || MarkdownWebView.Visibility != Visibility.Visible
+        if (markdownEditorOpen || markdownDocumentId is null || MarkdownWebView.Visibility != Visibility.Visible
             || (e.Source != "about:blank" && !e.Source.StartsWith("about:blank#", StringComparison.Ordinal))) return;
         try
         {
@@ -210,7 +226,8 @@ public partial class FileResourcePreviewControl : UserControl
                 string? error = null;
                 try
                 {
-                    await Task.Run(() => file.SetChecked(request.position.Value, request.isChecked.Value));
+                    markdownTaskSave = Task.Run(() => file.SetChecked(request.position.Value, request.isChecked.Value));
+                    await markdownTaskSave;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
                 {
@@ -253,6 +270,38 @@ public partial class FileResourcePreviewControl : UserControl
     }
 
     private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked);
+
+    private async void EditMarkdownButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (markdownEditorOpen || markdownTaskFile is null || Resource is null) return;
+        var resource = Resource;
+        var version = previewVersion;
+        markdownEditorOpen = true;
+        EditMarkdownButton.IsEnabled = false;
+        try
+        {
+            // Finish an already-clicked checkbox save before taking the editor's snapshot.
+            if (markdownTaskSave is not null)
+            {
+                try { await markdownTaskSave; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException) { }
+            }
+            var file = await Task.Run(() => MarkdownTaskFile.Load(resource.Content, MaxPreviewBytes));
+            if (version != previewVersion) return;
+            if (file is null) throw new IOException("This file is too large or uses an unsupported encoding. Use Open to edit externally.");
+            var editor = new MarkdownEditWindow(file, resource.Content, MaxPreviewBytes) { Owner = Window.GetWindow(this) };
+            editor.ShowDialog();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        {
+            MessageBox.Show(Window.GetWindow(this), ex.Message, "Edit Markdown", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            markdownEditorOpen = false;
+            if (version == previewVersion) await LoadPreviewAsync();
+        }
+    }
 
     private static string ReadTextPreview(string path)
     {

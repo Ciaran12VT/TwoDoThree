@@ -35,7 +35,7 @@
             <Button Width="84"
                     Content="Cancel"
                     Click="CancelButton_Click" />
-            <Button Width="84"
+            <Button x:Name="AcceptButton" Width="84"
                     Margin="8,0,0,0"
                     Content="Rename"
                     IsDefault="True"

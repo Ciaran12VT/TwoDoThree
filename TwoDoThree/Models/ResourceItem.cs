@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections;
 using System.IO;
 using System.Text.Json.Serialization;
 using TwoDoThree.ViewModels;
@@ -17,6 +18,39 @@ public sealed class ResourceItem : ObservableObject
     private string emailFrom = string.Empty;
     private string emailSubject = string.Empty;
     private DateTime? emailReceivedOn;
+    private Guid? parentVirtualFolderId;
+    private bool isExpanded;
+
+    // Derived from virtual folders' stored membership, never a separate persisted relationship.
+    [JsonIgnore]
+    public Guid? ParentVirtualFolderId
+    {
+        get => parentVirtualFolderId;
+        set => SetProperty(ref parentVirtualFolderId, value);
+    }
+
+    [JsonIgnore]
+    public bool IsExpanded
+    {
+        get => isExpanded;
+        set => SetProperty(ref isExpanded, value);
+    }
+
+    [JsonIgnore]
+    public ObservableCollection<ResourceItem> VirtualChildren { get; } = new();
+
+    [JsonIgnore]
+    public IEnumerable TreeChildren => Kind == ResourceKind.VirtualFolder ? VirtualChildren : FolderChildren;
+
+    [JsonIgnore]
+    public bool IsFileTreeResource => Kind is ResourceKind.File or ResourceKind.Folder or ResourceKind.VirtualFolder;
+
+    [JsonIgnore]
+    public bool IsFolderIcon => Kind is ResourceKind.Folder or ResourceKind.VirtualFolder;
+
+    // Folder geometry and colors adapted from Surf2.Models.FileSystemNode.
+    [JsonIgnore]
+    public string FolderIconGeometry => "M2.5,5.5 L7,5.5 L8.5,7.2 L15.5,7.2 Q16.5,7.2 16.5,8.2 L16.5,14.5 Q16.5,15.5 15.5,15.5 L2.5,15.5 Q1.5,15.5 1.5,14.5 L1.5,6.5 Q1.5,5.5 2.5,5.5 Z";
 
     public Guid Id
     {
@@ -113,7 +147,8 @@ public sealed class ResourceItem : ObservableObject
     };
 
     [JsonIgnore]
-    public string FileIconColor => Path.GetExtension(Content).ToLowerInvariant() switch
+    public string FileIconColor => Kind == ResourceKind.VirtualFolder ? "#C2410C"
+        : Kind == ResourceKind.Folder ? "#B47900" : Path.GetExtension(Content).ToLowerInvariant() switch
     {
         ".pdf" => "#B91C1C",
         ".doc" or ".docx" => "#1D4ED8",

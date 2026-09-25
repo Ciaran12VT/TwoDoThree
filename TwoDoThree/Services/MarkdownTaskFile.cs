@@ -3,7 +3,7 @@ using System.Text;
 
 namespace TwoDoThree.Services;
 
-/// <summary>A preview snapshot that can update only parsed task markers, preserving all other bytes.</summary>
+/// <summary>A file snapshot supporting source edits and precise task-marker updates.</summary>
 public sealed class MarkdownTaskFile
 {
     private readonly string path;
@@ -72,5 +72,47 @@ public sealed class MarkdownTaskFile
         }
     }
 
-    private static IOException ChangedFile() => new("The file changed outside this preview. Reopen the preview before changing tasks.");
+    public void SaveText(string text, int maximumBytes)
+    {
+        lock (gate)
+        {
+            var body = encoding.GetBytes(text);
+            if (body.Length + preambleLength > maximumBytes)
+                throw new IOException("The edited file exceeds the 1 MB viewer limit. Shorten it or use an external editor.");
+            if (text.Contains('\0')) throw new ArgumentException("Markdown cannot contain null characters.");
+            byte[] replacement = [.. snapshot.AsSpan(0, preambleLength), .. body];
+            var positions = MarkdownPreviewHtml.GetTaskMarkerPositions(text);
+            // Stage the entire replacement beside the original. Failed writes leave it untouched.
+            var temporary = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".2do3-{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var staged = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    staged.Write(replacement);
+                    staged.Flush(flushToDisk: true);
+                }
+                // Keep other writers out while checking and replacing. Delete sharing allows the
+                // atomic replacement and preserves the destination's permissions on Windows.
+                using var original = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                if (original.Length != snapshot.Length) throw ChangedFile();
+                var current = new byte[snapshot.Length];
+                original.ReadExactly(current);
+                if (!current.AsSpan().SequenceEqual(snapshot)) throw ChangedFile();
+                if (replacement.AsSpan().SequenceEqual(snapshot)) return;
+                File.Replace(temporary, path, null);
+                snapshot = replacement;
+                Text = text;
+                taskPositions.Clear();
+                taskPositions.UnionWith(positions);
+            }
+            finally
+            {
+                try { File.Delete(temporary); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+    }
+
+    private static IOException ChangedFile() => new("The file changed outside this preview. Your changes have not been written. Copy any edits you want to keep, then reopen the file.");
 }

@@ -34,6 +34,8 @@ public partial class TaskDetailWindow : Window
     private static readonly double[] TextFontSizes = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
 
     private bool isResourceTreeVisible = true;
+    private Point resourceDragStart;
+    private ResourceItem? resourceDragSource;
     private bool isUpdatingTaskStatusSelection;
     private GridLength expandedResourcePaneWidth = new(292);
     private GridLength expandedResourceSectionHeight = new(3, GridUnitType.Star);
@@ -106,6 +108,7 @@ public partial class TaskDetailWindow : Window
         {
             case ResourceItem resource:
                 viewModel.SelectedResource = resource;
+                if (resource.Kind == ResourceKind.VirtualFolder) resource.IsExpanded = true;
                 if (resource.Kind == ResourceKind.Folder)
                     await LoadRootFolderAsync(resource);
                 break;
@@ -237,19 +240,79 @@ public partial class TaskDetailWindow : Window
         }
     }
 
+    private void ResourceTree_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        resourceDragStart = e.GetPosition(ResourceTree);
+        resourceDragSource = FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject)?.DataContext as ResourceItem;
+    }
+
     private void ResourceTree_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed)
+        if (e.LeftButton != MouseButtonState.Pressed || resourceDragSource is not { } resource)
         {
             return;
         }
 
-        if (FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject) is not { DataContext: ResourceItem resource })
+        var position = e.GetPosition(ResourceTree);
+        if (Math.Abs(position.X - resourceDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(position.Y - resourceDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
         {
             return;
         }
 
-        DragDrop.DoDragDrop(ResourceTree, ResourceLinkHelper.CreateDataObject(resource), DragDropEffects.Copy);
+        resourceDragSource = null;
+        DragDrop.DoDragDrop(ResourceTree, ResourceLinkHelper.CreateDataObject(resource), DragDropEffects.Copy | DragDropEffects.Move);
+    }
+
+    private ResourceItem? GetVirtualFolderDropTarget(DependencyObject? source)
+    {
+        var item = FindAncestor<TreeViewItem>(source);
+        while (item is not null)
+        {
+            if (item.DataContext is ResourceItem { Kind: ResourceKind.VirtualFolder } folder)
+                return DataContext is TaskDetailViewModel model && model.Task.Resources.Contains(folder) ? folder : null;
+            item = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(item));
+        }
+        return null;
+    }
+
+    private void Resources_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (DataContext is not TaskDetailViewModel model) return;
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = (e.AllowedEffects & DragDropEffects.Copy) != 0 ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        }
+        else if (FindAncestor<TreeView>(e.OriginalSource as DependencyObject) == ResourceTree
+                 && ResourceLinkHelper.TryGetDraggedResource(e, out var resource) && resource is not null)
+        {
+            e.Effects = model.CanMoveResource(resource, GetVirtualFolderDropTarget(e.OriginalSource as DependencyObject))
+                && (e.AllowedEffects & DragDropEffects.Move) != 0 ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+        }
+    }
+
+    private void Resources_PreviewDrop(object sender, DragEventArgs e)
+    {
+        if (DataContext is not TaskDetailViewModel model) return;
+        var folder = GetVirtualFolderDropTarget(e.OriginalSource as DependencyObject);
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Handled = true;
+            e.Effects = DragDropEffects.None;
+            if ((e.AllowedEffects & DragDropEffects.Copy) != 0
+                && e.Data.GetData(DataFormats.FileDrop) is string[] paths
+                && model.AddLocalPaths(paths, folder).Count > 0)
+                e.Effects = DragDropEffects.Copy;
+        }
+        else if (FindAncestor<TreeView>(e.OriginalSource as DependencyObject) == ResourceTree
+                 && ResourceLinkHelper.TryGetDraggedResource(e, out var resource) && resource is not null)
+        {
+            e.Handled = true;
+            e.Effects = (e.AllowedEffects & DragDropEffects.Move) != 0 && model.MoveResource(resource, folder)
+                ? DragDropEffects.Move : DragDropEffects.None;
+        }
     }
 
     private void ResourceTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -257,9 +320,14 @@ public partial class TaskDetailWindow : Window
         RemoveMakeGlobalResourceMenuItems();
 
         RenameResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem;
-        RemoveResourceMenuItem.IsEnabled = ResourceTree.SelectedItem is ResourceItem selected
+        // A background right-click must not remove the previously selected resource.
+        var isResourceTarget = e.CursorLeft < 0
+            || FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject)?.DataContext is ResourceItem;
+        PopulateVirtualFolderMenu(isResourceTarget);
+        RemoveResourceMenuItem.IsEnabled = isResourceTarget
+            && ResourceTree.SelectedItem is ResourceItem selected
             && DataContext is TaskDetailViewModel model && model.CanRemoveResourceFromTask(selected);
-        if (ResourceTree.SelectedItem is not ResourceItem
+        if (ResourceTree.SelectedItem is not ResourceItem { Kind: not ResourceKind.VirtualFolder }
             || DataContext is not TaskDetailViewModel viewModel)
         {
             return;
@@ -285,6 +353,43 @@ public partial class TaskDetailWindow : Window
             };
             item.Click += MakeGlobalResourceMenuItem_Click;
             ResourceTree.ContextMenu.Items.Add(item);
+        }
+    }
+
+    private void NewVirtualFolderMenuItem_Click(object sender, RoutedEventArgs e) => CreateVirtualFolder(null);
+
+    private void NewVirtualFolderInsideMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResourceTree.SelectedItem is ResourceItem { Kind: ResourceKind.VirtualFolder } folder)
+            CreateVirtualFolder(folder);
+    }
+
+    private void CreateVirtualFolder(ResourceItem? parent)
+    {
+        if (DataContext is not TaskDetailViewModel model) return;
+        var dialog = new RenameResourceWindow("Virtual folder", creatingVirtualFolder: true) { Owner = this };
+        if (dialog.ShowDialog() == true) model.CreateVirtualFolder(dialog.ResourceName, parent);
+    }
+
+    private void PopulateVirtualFolderMenu(bool isResourceTarget)
+    {
+        MoveToVirtualFolderMenuItem.Items.Clear();
+        var model = DataContext as TaskDetailViewModel;
+        var resource = isResourceTarget ? ResourceTree.SelectedItem as ResourceItem : null;
+        NewVirtualFolderInsideMenuItem.IsEnabled = resource?.Kind == ResourceKind.VirtualFolder
+            && model?.Task.Resources.Contains(resource) == true;
+        MoveToVirtualFolderMenuItem.IsEnabled = resource is not null && model?.CanMoveResource(resource, null) == true;
+        if (!MoveToVirtualFolderMenuItem.IsEnabled || resource is null || model is null) return;
+
+        var rootItem = new MenuItem { Header = "Files and Folders (root)" };
+        rootItem.Click += (_, _) => model.MoveResource(resource, null);
+        MoveToVirtualFolderMenuItem.Items.Add(rootItem);
+        foreach (var folder in model.Task.Resources.Where(item => item.Kind == ResourceKind.VirtualFolder
+                     && model.CanMoveResource(resource, item)))
+        {
+            var item = new MenuItem { Header = folder.Name };
+            item.Click += (_, _) => model.MoveResource(resource, folder);
+            MoveToVirtualFolderMenuItem.Items.Add(item);
         }
     }
 

@@ -1402,6 +1402,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void Resource_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(ResourceItem.IsExpanded) or nameof(ResourceItem.ParentVirtualFolderId)) return;
         if (sender is not ResourceItem resource
             || Tasks.FirstOrDefault(task => task.Resources.Contains(resource)) is not { } task)
         {

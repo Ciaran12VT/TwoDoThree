@@ -10,5 +10,6 @@ public enum ResourceKind
     Audio,
     SurfResource,
     File,
-    Folder
+    Folder,
+    VirtualFolder
 }

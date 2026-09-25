@@ -114,6 +114,14 @@
         <DataTemplate x:Key="FileResourceTemplate" DataType="{x:Type models:ResourceItem}">
             <controls:FileResourcePreviewControl Resource="{Binding}" />
         </DataTemplate>
+        <DataTemplate x:Key="VirtualFolderResourceTemplate" DataType="{x:Type models:ResourceItem}">
+            <StackPanel Margin="16">
+                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Text="Virtual folder. Drag files, linked folders, or other virtual folders onto this group in the tree to organize them. Removing the group keeps its contents in the task." />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <ContentControl Content="{Binding Resource, ElementName=Root}">
@@ -121,6 +129,9 @@
             <Style TargetType="{x:Type ContentControl}">
                 <Setter Property="ContentTemplate" Value="{StaticResource TextResourceTemplate}" />
                 <Style.Triggers>
+                    <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.VirtualFolder}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource VirtualFolderResourceTemplate}" />
+                    </DataTrigger>
                     <DataTrigger Binding="{Binding Resource.Kind, ElementName=Root}" Value="{x:Static models:ResourceKind.CodeSnippet}">
                         <Setter Property="ContentTemplate" Value="{StaticResource CodeResourceTemplate}" />
                     </DataTrigger>
