@@ -1,18 +1,24 @@
 <UserControl x:Class="TwoDoThree.Controls.FileResourcePreviewControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,5">
             <Button x:Name="OpenButton" DockPanel.Dock="Right" Content="Open" Padding="14,5"
                     Margin="8,0,0,0" Click="OpenButton_Click" />
-            <Button x:Name="EditMarkdownButton" DockPanel.Dock="Right" Content="Edit" Padding="14,5"
+            <Button x:Name="EditMarkdownButton" DockPanel.Dock="Right" Content="Edit source" Padding="14,5"
                     Margin="8,0,0,0" Visibility="Collapsed" Click="EditMarkdownButton_Click" />
+            <Button x:Name="SaveMarkdownButton" DockPanel.Dock="Right" Content="Save" Padding="14,5"
+                    Margin="8,0,0,0" Visibility="Collapsed" Click="SaveMarkdownButton_Click" />
+            <Button x:Name="DiscardMarkdownButton" DockPanel.Dock="Right" Content="Discard changes" Padding="14,5"
+                    Margin="8,0,0,0" Visibility="Collapsed" Click="DiscardMarkdownButton_Click" />
             <TextBlock x:Name="NameBlock" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
         </DockPanel>
         <TextBlock x:Name="DetailsBlock" Grid.Row="1" Margin="0,0,0,9" TextWrapping="Wrap"
@@ -24,6 +30,12 @@
             <wv2:WebView2CompositionControl x:Name="PdfWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
             <wv2:WebView2CompositionControl x:Name="MarkdownWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
             <wv2:WebView2 x:Name="NativeMarkdownWebView" Visibility="Collapsed" AllowDrop="False" AllowExternalDrop="False" />
+            <avalonEdit:TextEditor x:Name="MarkdownSourceEditor" Visibility="Collapsed" AllowDrop="False"
+                FontFamily="Consolas" FontSize="14" ShowLineNumbers="True" WordWrap="False"
+                HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                TextChanged="MarkdownSourceEditor_TextChanged" PreviewKeyDown="MarkdownSourceEditor_PreviewKeyDown" />
         </Grid>
+        <TextBlock x:Name="MarkdownEditStatus" Grid.Row="3" TextWrapping="Wrap" Margin="0,6,0,0"
+                   AutomationProperties.LiveSetting="Polite" />
     </Grid>
 </UserControl>

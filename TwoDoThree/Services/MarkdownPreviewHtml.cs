@@ -40,13 +40,37 @@ public static class MarkdownPreviewHtml
         }
     }
 
-    public static string CreateDisplayDocument(string markdown, string documentId, bool editableTasks = false)
+    public static string CreateDisplayDocument(string markdown, string documentId, bool editableTasks = false,
+        bool includeSourceMap = false, MarkdownViewportAnchor? anchor = null)
     {
         using var writer = new System.IO.StringWriter();
         var renderer = new HtmlRenderer(writer);
         Pipeline.Setup(renderer);
         renderer.ObjectRenderers.Insert(0, new TaskRenderer(markdown, editableTasks));
-        renderer.Render(Markdown.Parse(markdown, Pipeline));
+        var document = Markdown.Parse(markdown, Pipeline);
+        if (includeSourceMap)
+        {
+            var lineStarts = new List<int> { 0 };
+            for (int i = 0; i < markdown.Length; i++)
+            {
+                if (markdown[i] == '\r')
+                {
+                    if (i + 1 < markdown.Length && markdown[i + 1] == '\n') i++;
+                    lineStarts.Add(i + 1);
+                }
+                else if (markdown[i] == '\n') lineStarts.Add(i + 1);
+            }
+            foreach (var block in document.Descendants<Block>())
+            {
+                if (block.Span.Start < 0 || block.Span.End < block.Span.Start) continue;
+                var end = lineStarts.BinarySearch(Math.Min(block.Span.End, markdown.Length));
+                var endLine = end >= 0 ? end + 1 : ~end;
+                var attributes = block.GetAttributes();
+                attributes.AddProperty("data-source-start", (block.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                attributes.AddProperty("data-source-end", endLine.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        renderer.Render(document);
         var body = writer.ToString();
         var nonce = Guid.NewGuid().ToString("N");
         var documentIdJson = System.Text.Json.JsonSerializer.Serialize(documentId);
@@ -86,6 +110,7 @@ pre code { padding: 0; background: transparent; }
 {{body}}
 <script nonce="{{nonce}}">
 const documentId = {{documentIdJson}};
+const initialAnchor = {{System.Text.Json.JsonSerializer.Serialize(anchor)}};
 const buttons = [];
 const tasks = Array.from(document.querySelectorAll('input.markdown-task:not(:disabled)'));
 const taskStatus = document.getElementById('task-status');
@@ -105,6 +130,13 @@ document.querySelectorAll('pre > code').forEach((code, id) => {
     const pre = code.parentElement;
     const wrapper = document.createElement('div');
     wrapper.className = 'code-block';
+    const mapped = pre.matches('[data-source-start]') ? pre : pre.querySelector('[data-source-start]');
+    if (mapped) {
+        wrapper.dataset.sourceStart = mapped.dataset.sourceStart;
+        wrapper.dataset.sourceEnd = mapped.dataset.sourceEnd;
+        mapped.removeAttribute('data-source-start');
+        mapped.removeAttribute('data-source-end');
+    }
     pre.replaceWith(wrapper);
     wrapper.append(pre);
     const button = document.createElement('button');
@@ -120,6 +152,38 @@ document.querySelectorAll('pre > code').forEach((code, id) => {
     wrapper.append(button);
     buttons.push(button);
 });
+// Anchor to a source range and its position in the viewport, never document scroll percentage.
+function sourceBlocks() {
+    return Array.from(document.querySelectorAll('[data-source-start]'))
+        .filter(e => e.getBoundingClientRect().height > 0 && !e.querySelector('[data-source-start]'));
+}
+function captureMarkdownAnchor() {
+    const blocks = sourceBlocks(), target = innerHeight * .2;
+    if (!blocks.length || scrollY <= 1) return { line: 1, viewport: 0, edge: 'start' };
+    const element = blocks.reduce((best, e) => {
+        const distance = r => Math.max(r.top - target, target - r.bottom, 0);
+        return !best || distance(e.getBoundingClientRect()) < distance(best.getBoundingClientRect()) ? e : best;
+    }, null);
+    const r = element.getBoundingClientRect();
+    const y = Math.max(r.top, Math.min(target, r.bottom));
+    const start = Number(element.dataset.sourceStart), end = Number(element.dataset.sourceEnd);
+    return { line: start + Math.min(.999999, (y-r.top)/r.height) * (end-start+1),
+        viewport: y/innerHeight, edge: scrollY + innerHeight >= document.documentElement.scrollHeight - 1 ? 'end' : null };
+}
+function restoreMarkdownAnchor(anchor) {
+    if (!anchor) return;
+    if (anchor.edge === 'start') { scrollTo(0, 0); return; }
+    if (anchor.edge === 'end') { scrollTo(0, document.documentElement.scrollHeight); return; }
+    const blocks = sourceBlocks();
+    const distance = e => Math.max(Number(e.dataset.sourceStart)-anchor.line, anchor.line-(Number(e.dataset.sourceEnd)+1), 0);
+    const element = blocks.reduce((best, e) => !best || distance(e) < distance(best) ? e : best, null);
+    if (!element) return;
+    const start = Number(element.dataset.sourceStart), end = Number(element.dataset.sourceEnd);
+    const fraction = Math.max(0, Math.min(1, (anchor.line-start)/(end-start+1)));
+    const r = element.getBoundingClientRect();
+    scrollTo(0, scrollY+r.top+r.height*fraction-anchor.viewport*innerHeight);
+}
+requestAnimationFrame(() => restoreMarkdownAnchor(initialAnchor));
 window.chrome.webview.addEventListener('message', ({ data }) => {
     if (data.documentId !== documentId) return;
     if (data.action === 'toggleTask') {

@@ -11,7 +11,6 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using TwoDoThree.Models;
 using TwoDoThree.Services;
-using TwoDoThree.Views;
 
 namespace TwoDoThree.Controls;
 
@@ -43,12 +42,20 @@ public partial class FileResourcePreviewControl : UserControl
 
     public static readonly DependencyProperty ResourceProperty = DependencyProperty.Register(
         nameof(Resource), typeof(ResourceItem), typeof(FileResourcePreviewControl),
-        new PropertyMetadata(null, OnResourceChanged));
+        new FrameworkPropertyMetadata(null, OnResourceChanged, CoerceResource));
 
     public FileResourcePreviewControl()
     {
         InitializeComponent();
-        Loaded += (_, _) => _ = LoadPreviewAsync();
+        // Composition WebView2 uses different browser environment options. Sharing its
+        // user-data folder with a native controller fails with ERROR_INVALID_STATE.
+        NativeMarkdownWebView.CreationProperties = new CoreWebView2CreationProperties
+        {
+            UserDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "TwoDoThree", "WebView2", "NativeMarkdown")
+        };
+        Loaded += PreviewLoaded;
+        Unloaded += PreviewUnloaded;
         MarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
         MarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
         NativeMarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
@@ -63,16 +70,21 @@ public partial class FileResourcePreviewControl : UserControl
 
     private static void OnResourceChanged(DependencyObject owner, DependencyPropertyChangedEventArgs args)
     {
-        _ = ((FileResourcePreviewControl)owner).LoadPreviewAsync();
+        var preview = (FileResourcePreviewControl)owner;
+        if (args.Property == ResourceProperty) preview.ResetMarkdownEditing();
+        _ = preview.LoadPreviewAsync();
     }
 
     private async Task LoadPreviewAsync()
     {
+        if (HasMarkdownDraft || markdownEditorOpen) return;
         var resource = Resource;
         var version = ++previewVersion;
         markdownDocumentId = null;
         markdownTaskFile = null;
         EditMarkdownButton.Visibility = Visibility.Collapsed;
+        SaveMarkdownButton.Visibility = DiscardMarkdownButton.Visibility = Visibility.Collapsed;
+        MarkdownEditStatus.Text = string.Empty;
         markdownNavigationPending = false;
         MarkdownWebView.Visibility = Visibility.Collapsed;
         NativeMarkdownWebView.Visibility = Visibility.Collapsed;
@@ -148,11 +160,13 @@ public partial class FileResourcePreviewControl : UserControl
             if (extension is ".md" or ".markdown")
             {
                 markdownTaskFile = taskFile;
-                EditMarkdownButton.Visibility = Visibility.Visible;
+                EditMarkdownButton.Visibility = UseNativeMarkdownRenderer ? Visibility.Visible : Visibility.Collapsed;
+                SaveMarkdownButton.Visibility = DiscardMarkdownButton.Visibility = EditMarkdownButton.Visibility;
                 EditMarkdownButton.IsEnabled = taskFile is not null;
                 EditMarkdownButton.ToolTip = taskFile is null
                     ? "Editing is unavailable for truncated or unsupported text. Use Open to edit externally."
-                    : "Edit the Markdown source and save to the original file";
+                    : "Switch between formatted Markdown and source in this window";
+                InitializeMarkdownSource(taskFile);
                 await ShowMarkdownPreviewAsync(result, version, taskFile is not null);
             }
         }
@@ -163,12 +177,13 @@ public partial class FileResourcePreviewControl : UserControl
         }
     }
 
-    private async Task ShowMarkdownPreviewAsync(string markdown, int version, bool editableTasks)
+    private async Task ShowMarkdownPreviewAsync(string markdown, int version, bool editableTasks, MarkdownViewportAnchor? anchor = null)
     {
         try
         {
             var documentId = Guid.NewGuid().ToString("N");
-            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks));
+            var sourceMap = UseNativeMarkdownRenderer;
+            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks, sourceMap, anchor));
             if (version != previewVersion) return;
             var browser = MarkdownBrowser;
             MarkdownSurface.Visibility = Visibility.Visible;
@@ -176,17 +191,32 @@ public partial class FileResourcePreviewControl : UserControl
             if (version != previewVersion) return;
             markdownDocumentId = documentId;
             markdownNavigationPending = true;
-            browser.NavigateToString(html);
+            var navigation = new TaskCompletionSource<bool>();
+            void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs args)
+            {
+                if (args.IsSuccess) navigation.TrySetResult(true);
+                else navigation.TrySetException(new IOException($"Markdown navigation failed: {args.WebErrorStatus}"));
+            }
+            browser.NavigationCompleted += Completed;
+            try
+            {
+                browser.NavigateToString(html);
+                await navigation.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            }
+            finally { browser.NavigationCompleted -= Completed; }
+            if (version != previewVersion) return;
             MarkdownSurface.Visibility = Visibility.Visible;
             PreviewTextBox.Visibility = Visibility.Collapsed;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             if (version != previewVersion) return;
+            Trace.TraceError($"Markdown preview ({MarkdownBrowser.GetType().Name}) failed: {ex}");
             MarkdownSurface.Visibility = Visibility.Collapsed;
+            PreviewTextBox.Visibility = Visibility.Visible;
             markdownDocumentId = null;
             markdownNavigationPending = false;
-            DetailsBlock.Text += "\nFormatted Markdown preview is unavailable. Showing plain text.";
+            DetailsBlock.Text += $"\nFormatted Markdown preview is unavailable: {ex.Message}. Showing plain text.";
         }
     }
 
@@ -234,7 +264,7 @@ public partial class FileResourcePreviewControl : UserControl
 
     private async void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (markdownEditorOpen || markdownDocumentId is null || MarkdownSurface.Visibility != Visibility.Visible
+        if (markdownEditorOpen || markdownModeChanging || markdownDocumentId is null || MarkdownSurface.Visibility != Visibility.Visible
             || !ReferenceEquals(sender, MarkdownBrowser.CoreWebView2)
             || (e.Source != "about:blank" && !e.Source.StartsWith("about:blank#", StringComparison.Ordinal))) return;
         try
@@ -243,6 +273,7 @@ public partial class FileResourcePreviewControl : UserControl
             if (request is null || request.documentId != markdownDocumentId) return;
             if (request.action == "toggleTask")
             {
+                if (HasMarkdownDraft) return;
                 var file = markdownTaskFile;
                 if (file is null || request.position is null || request.isChecked is null) return;
                 string? error = null;
@@ -260,6 +291,7 @@ public partial class FileResourcePreviewControl : UserControl
                 if (error is null)
                 {
                     PreviewTextBox.Text = file.Text;
+                    InitializeMarkdownSource(file);
                     DetailsBlock.Text = $"{Resource?.Content}\nTask saved to the original file.";
                 }
                 MarkdownBrowser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
@@ -292,38 +324,6 @@ public partial class FileResourcePreviewControl : UserControl
     }
 
     private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked);
-
-    private async void EditMarkdownButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (markdownEditorOpen || markdownTaskFile is null || Resource is null) return;
-        var resource = Resource;
-        var version = previewVersion;
-        markdownEditorOpen = true;
-        EditMarkdownButton.IsEnabled = false;
-        try
-        {
-            // Finish an already-clicked checkbox save before taking the editor's snapshot.
-            if (markdownTaskSave is not null)
-            {
-                try { await markdownTaskSave; }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException) { }
-            }
-            var file = await Task.Run(() => MarkdownTaskFile.Load(resource.Content, MaxPreviewBytes));
-            if (version != previewVersion) return;
-            if (file is null) throw new IOException("This file is too large or uses an unsupported encoding. Use Open to edit externally.");
-            var editor = new MarkdownEditWindow(file, resource.Content, MaxPreviewBytes) { Owner = Window.GetWindow(this) };
-            editor.ShowDialog();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
-        {
-            MessageBox.Show(Window.GetWindow(this), ex.Message, "Edit Markdown", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-        finally
-        {
-            markdownEditorOpen = false;
-            if (version == previewVersion) await LoadPreviewAsync();
-        }
-    }
 
     private static string ReadTextPreview(string path)
     {

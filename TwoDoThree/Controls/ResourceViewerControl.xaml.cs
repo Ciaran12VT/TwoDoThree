@@ -23,7 +23,17 @@ public partial class ResourceViewerControl : UserControl
             nameof(Resource),
             typeof(ResourceItem),
             typeof(ResourceViewerControl),
-            new PropertyMetadata(null));
+            new FrameworkPropertyMetadata(null, null, CoerceResource));
+
+    private static object? CoerceResource(DependencyObject owner, object? value)
+    {
+        var viewer = (ResourceViewerControl)owner;
+        var preview = FindVisualChild<FileResourcePreviewControl>(viewer);
+        // A change of resource kind replaces the entire data template. Protect its
+        // inline Markdown draft before that can remove the editing control.
+        return ReferenceEquals(value, viewer.Resource) || preview is null || preview.ConfirmPendingMarkdownEdits()
+            ? value : viewer.Resource;
+    }
 
     public ResourceViewerControl()
     {
