@@ -60,6 +60,7 @@ public partial class FileResourcePreviewControl : UserControl
         MarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
         NativeMarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
         NativeMarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
+        InitializePinIntegration();
     }
 
     public ResourceItem? Resource
@@ -111,6 +112,12 @@ public partial class FileResourcePreviewControl : UserControl
 
         if (!File.Exists(path))
         {
+            if (UseNativeMarkdownRenderer && System.IO.Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown")
+            {
+                AttachMarkdownSession(path);
+                await ShowMarkdownPreviewAsync("# Source unavailable\nThe linked Markdown file is missing or inaccessible.", version, false);
+                return;
+            }
             PreviewTextBox.Text = "The linked file is missing or inaccessible.";
             return;
         }
@@ -159,6 +166,7 @@ public partial class FileResourcePreviewControl : UserControl
             PreviewTextBox.Text = result;
             if (extension is ".md" or ".markdown")
             {
+                AttachMarkdownSession(path);
                 markdownTaskFile = taskFile;
                 EditMarkdownButton.Visibility = UseNativeMarkdownRenderer ? Visibility.Visible : Visibility.Collapsed;
                 SaveMarkdownButton.Visibility = DiscardMarkdownButton.Visibility = EditMarkdownButton.Visibility;
@@ -183,7 +191,8 @@ public partial class FileResourcePreviewControl : UserControl
         {
             var documentId = Guid.NewGuid().ToString("N");
             var sourceMap = UseNativeMarkdownRenderer;
-            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks, sourceMap, anchor));
+            var pins = PinPresentation(editableTasks);
+            var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks, sourceMap, anchor, pins));
             if (version != previewVersion) return;
             var browser = MarkdownBrowser;
             MarkdownSurface.Visibility = Visibility.Visible;
@@ -271,6 +280,7 @@ public partial class FileResourcePreviewControl : UserControl
         {
             var request = JsonSerializer.Deserialize<MarkdownPreviewRequest>(e.WebMessageAsJson);
             if (request is null || request.documentId != markdownDocumentId) return;
+            if (HandlePinMessage(request)) return;
             if (request.action == "toggleTask")
             {
                 if (HasMarkdownDraft) return;
@@ -279,8 +289,14 @@ public partial class FileResourcePreviewControl : UserControl
                 string? error = null;
                 try
                 {
-                    markdownTaskSave = Task.Run(() => file.SetChecked(request.position.Value, request.isChecked.Value));
+                    var session = markdownSession;
+                    markdownTaskSave = Task.Run(() =>
+                    {
+                        if (session is not null) session.SetChecked(file.Text, request.position.Value, request.isChecked.Value, request.pinId);
+                        else file.SetChecked(request.position.Value, request.isChecked.Value);
+                    });
                     await markdownTaskSave;
+                    if (session is not null) file = session.LoadSnapshot()!;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
                 {
@@ -290,8 +306,11 @@ public partial class FileResourcePreviewControl : UserControl
                 if (request.documentId != markdownDocumentId) return;
                 if (error is null)
                 {
+                    markdownTaskFile = file;
                     PreviewTextBox.Text = file.Text;
                     InitializeMarkdownSource(file);
+                    PostTaskSync(request.position.Value, request.isChecked.Value);
+                    if (markdownSession?.Error is { } pinError) PostPinUpdate(pinError);
                     DetailsBlock.Text = $"{Resource?.Content}\nTask saved to the original file.";
                 }
                 MarkdownBrowser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
@@ -323,7 +342,8 @@ public partial class FileResourcePreviewControl : UserControl
         }
     }
 
-    private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked);
+    private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked,
+        string? pinId, double? start, double? end);
 
     private static string ReadTextPreview(string path)
     {

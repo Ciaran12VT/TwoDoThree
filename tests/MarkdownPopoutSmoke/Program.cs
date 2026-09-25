@@ -30,7 +30,7 @@ internal static class Program
             var directory = Directory.CreateTempSubdirectory("2do3-popout-smoke-");
             var path = Path.Combine(directory.FullName, "sample.md");
             File.WriteAllText(path, "# Rendered heading\n\n- [ ] Saved task\n\n```sql\nSELECT 1;\n```\n"
-                + string.Concat(Enumerable.Range(1, 80).Select(i => $"\n## Section {i}\n\nParagraph for passage {i}.\n\n- Item {i}\n- Another item\n\n```sql\nSELECT {i};\nSELECT 'second line';\n```\n")));
+                + string.Concat(Enumerable.Range(1, 80).Select(i => $"\n## Section {i}\n\nParagraph with **formatted passage {i}** and a [link](https://example.com).\n\n- Item {i}\n- Another item\n\n```sql\nSELECT {i};\nSELECT 'second line';\n```\n")));
             TaskDetailWindow? owner = null;
             var popouts = new List<ResourcePopoutWindow>();
             try
@@ -81,6 +81,8 @@ internal static class Program
                 await firstBrowser.ExecuteScriptAsync("document.querySelector('.markdown-task').click()");
                 await WaitUntil(async () => await firstBrowser.ExecuteScriptAsync("document.getElementById('task-status').textContent") == "\"Task saved.\"");
                 Check(File.ReadAllText(path).Contains("[x] Saved task"), "Native checkbox saves to the original file");
+                var secondPreview = Descendants(popouts[1]).OfType<FileResourcePreviewControl>().Single();
+                await PinChecks.Run(firstPreview, firstBrowser, (WebView2)secondPreview.FindName("NativeMarkdownWebView"), path);
                 await CheckInlineEditing(firstPreview, firstBrowser, path);
                 await Rendered(composition, embedded);
                 Console.WriteLine("PASS: embedded-first initialization and simultaneous native popouts");
@@ -102,6 +104,8 @@ internal static class Program
                 }
                 if (owner is not null) { DisposeBrowsers(owner); owner.Close(); }
                 File.Delete(path);
+                var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())));
+                File.Delete(Path.Combine(AppStoragePaths.MarkdownPinsDirectory, key + ".json"));
                 directory.Delete();
                 app.Shutdown();
             }
@@ -230,7 +234,7 @@ internal static class Program
     }
 
     // Answer only this smoke process's modal prompt; never target another application.
-    private static async Task AnswerDialog(int answer, Action trigger, string title = "Unsaved Markdown changes")
+    internal static async Task AnswerDialog(int answer, Action trigger, string title = "Unsaved Markdown changes")
     {
         var responder = Task.Run(async () =>
         {

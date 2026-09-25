@@ -8,6 +8,15 @@ namespace TwoDoThree.Services;
 
 public static class MarkdownPreviewHtml
 {
+    private static string Asset(string name)
+    {
+        using var stream = typeof(MarkdownPreviewHtml).Assembly.GetManifestResourceStream("TwoDoThree.Assets." + name)!;
+        using var reader = new System.IO.StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+    private static readonly string PinScript = Asset("MarkdownPins.js");
+    private static readonly string PinStyles = Asset("MarkdownPins.css");
+    internal static MarkdownDocument ParseDocument(string source) => Markdown.Parse(source, Pipeline);
     // Enable document formatting without allowing embedded HTML or arbitrary attributes.
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAutoIdentifiers()
@@ -41,7 +50,7 @@ public static class MarkdownPreviewHtml
     }
 
     public static string CreateDisplayDocument(string markdown, string documentId, bool editableTasks = false,
-        bool includeSourceMap = false, MarkdownViewportAnchor? anchor = null)
+        bool includeSourceMap = false, MarkdownViewportAnchor? anchor = null, MarkdownPinPresentation? pinState = null)
     {
         using var writer = new System.IO.StringWriter();
         var renderer = new HtmlRenderer(writer);
@@ -70,6 +79,7 @@ public static class MarkdownPreviewHtml
                 attributes.AddProperty("data-source-end", endLine.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
         }
+        var runs = includeSourceMap ? MarkdownSelectionMap.Attach(renderer, document, markdown) : [];
         renderer.Render(document);
         var body = writer.ToString();
         var nonce = Guid.NewGuid().ToString("N");
@@ -103,32 +113,48 @@ pre code { padding: 0; background: transparent; }
 .markdown-task:not(:disabled) { cursor: pointer; }
 #task-status { position: sticky; top: 0; background: white; color: #475569; }
 #task-status:empty { display: none; }
+{{(includeSourceMap ? PinStyles : "")}}
 </style>
 </head>
-<body>
+<body class="{{(includeSourceMap ? "has-pins" : "")}}">
 <div id="task-status" role="status" aria-live="polite"></div>
+{{(includeSourceMap ? "<nav class='pin-toolbar' aria-label='Pinned excerpts'><button id='pin-toggle' aria-controls='pin-sidebar' aria-expanded='false'>Pins</button><button id='pin-selection'>Pin selection</button></nav><aside id='pin-sidebar' aria-label='Pinned excerpts'><p id='pin-status' role='status'></p><div id='pin-list'></div></aside>" : "")}}
+<main id="markdown-main">
 {{body}}
+</main>
 <script nonce="{{nonce}}">
 const documentId = {{documentIdJson}};
 const initialAnchor = {{System.Text.Json.JsonSerializer.Serialize(anchor)}};
-const buttons = [];
-const tasks = Array.from(document.querySelectorAll('input.markdown-task:not(:disabled)'));
-const taskStatus = document.getElementById('task-status');
-let pendingTask = null;
-tasks.forEach(task => {
-    task.setAttribute('aria-label', 'Toggle task: ' + task.parentElement.textContent.trim());
-    task.addEventListener('change', () => {
-        if (pendingTask) return;
-        pendingTask = { task, previous: !task.checked };
-        tasks.forEach(input => input.disabled = true);
-        taskStatus.textContent = 'Saving task…';
-        window.chrome.webview.postMessage({ action: 'toggleTask', documentId,
-            position: Number(task.dataset.position), isChecked: task.checked });
+const sourceRuns = {{System.Text.Json.JsonSerializer.Serialize(runs, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })}};
+sourceRuns.forEach(run => {
+    let segment = 0;
+    run.boundaries = Array.from({length:run.length+1}, (_, i) => {
+        while (segment+2 < run.segments.length && run.segments[segment+2] <= i) segment += 2;
+        return run.segments[segment+1] + i-run.segments[segment];
     });
 });
-document.querySelectorAll('pre > code').forEach((code, id) => {
+const buttons = new Map();
+let nextCopyId = 0;
+const tasksEditable = {{(editableTasks ? "true" : "false")}};
+const tasks = () => Array.from(document.querySelectorAll('input.markdown-task'));
+const taskStatus = document.getElementById('task-status');
+let pendingTask = null;
+tasks().forEach(task => {
+    task.setAttribute('aria-label', 'Toggle task: ' + task.parentElement.textContent.trim());
+});
+document.addEventListener('change', e => {
+        const task = e.target.closest('input.markdown-task');
+        if (!task || !tasksEditable || pendingTask) return;
+        pendingTask = { task, previous: !task.checked };
+        tasks().forEach(input => input.disabled = true);
+        taskStatus.textContent = 'Saving task…';
+        window.chrome.webview.postMessage({ action: 'toggleTask', documentId,
+            position: Number(task.dataset.position), isChecked: task.checked, pinId:task.closest('[data-pin-id]')?.dataset.pinId });
+});
+function initializeCodeCopies(root) { root.querySelectorAll('pre > code').forEach(code => {
+    const id = nextCopyId++;
     const pre = code.parentElement;
-    const wrapper = document.createElement('div');
+    const wrapper = pre.parentElement.classList.contains('code-block') ? pre.parentElement : document.createElement('div');
     wrapper.className = 'code-block';
     const mapped = pre.matches('[data-source-start]') ? pre : pre.querySelector('[data-source-start]');
     if (mapped) {
@@ -137,11 +163,11 @@ document.querySelectorAll('pre > code').forEach((code, id) => {
         mapped.removeAttribute('data-source-start');
         mapped.removeAttribute('data-source-end');
     }
-    pre.replaceWith(wrapper);
-    wrapper.append(pre);
+    if (pre.parentElement !== wrapper) { pre.replaceWith(wrapper); wrapper.append(pre); }
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'copy-code';
+    button.dataset.copyId = id;
     button.textContent = 'Copy';
     button.setAttribute('aria-label', 'Copy code to clipboard');
     button.setAttribute('aria-live', 'polite');
@@ -150,11 +176,12 @@ document.querySelectorAll('pre > code').forEach((code, id) => {
         window.chrome.webview.postMessage({ action: 'copy', documentId, id, text: code.textContent });
     });
     wrapper.append(button);
-    buttons.push(button);
-});
+    buttons.set(id, button);
+}); }
+initializeCodeCopies(document.getElementById('markdown-main'));
 // Anchor to a source range and its position in the viewport, never document scroll percentage.
 function sourceBlocks() {
-    return Array.from(document.querySelectorAll('[data-source-start]'))
+    return Array.from(document.getElementById('markdown-main').querySelectorAll('[data-source-start]'))
         .filter(e => e.getBoundingClientRect().height > 0 && !e.querySelector('[data-source-start]'));
 }
 function captureMarkdownAnchor() {
@@ -184,17 +211,24 @@ function restoreMarkdownAnchor(anchor) {
     scrollTo(0, scrollY+r.top+r.height*fraction-anchor.viewport*innerHeight);
 }
 requestAnimationFrame(() => restoreMarkdownAnchor(initialAnchor));
+const pinConfig = {{System.Text.Json.JsonSerializer.Serialize(pinState ?? new MarkdownPinPresentation([], editableTasks), new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })}};
+{{(includeSourceMap ? PinScript : "")}}
 window.chrome.webview.addEventListener('message', ({ data }) => {
     if (data.documentId !== documentId) return;
+    if (data.action === 'pins') { if (typeof updateMarkdownPins === 'function') updateMarkdownPins(data.pins, data.error, data.created); return; }
+    if (data.action === 'taskSync') {
+        tasks().filter(t => Number(t.dataset.position) === data.position).forEach(t => t.checked = data.isChecked);
+        return;
+    }
     if (data.action === 'toggleTask') {
         if (!pendingTask) return;
         if (!data.success) pendingTask.task.checked = pendingTask.previous;
-        tasks.forEach(input => input.disabled = false);
+        tasks().forEach(input => input.disabled = !tasksEditable);
         pendingTask = null;
         taskStatus.textContent = data.success ? 'Task saved.' : (data.error || 'Could not save task.');
         return;
     }
-    const button = buttons[data.id];
+    const button = buttons.get(data.id);
     if (!button) return;
     button.textContent = data.success ? 'Copied!' : 'Copy failed';
     button.setAttribute('aria-label', data.success ? 'Code copied to clipboard' : 'Copy failed. Try again.');

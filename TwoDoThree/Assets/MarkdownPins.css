@@ -1,0 +1,21 @@
+#markdown-main { min-width: 0; }
+#markdown-main > :first-child { margin-top: 0; }
+body.has-pins { padding-top: 48px; }
+.pin-toolbar { position: fixed; left: 8px; top: 6px; z-index: 10; display: flex; gap: 5px; }
+.pin-toolbar button, .pin-header button { font: 12px 'Segoe UI', sans-serif; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; cursor: pointer; }
+.pin-toolbar button:disabled { opacity: .55; cursor: default; }
+#pin-sidebar { display: none; position: fixed; left: 0; top: 40px; bottom: 0; width: min(330px, 40vw); box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: #f3f6fa; border-right: 1px solid #d8e0eb; z-index: 8; }
+body.pins-open #pin-sidebar { display: block; }
+body.pins-open:not(.pins-overlay) #markdown-main { margin-left: min(350px, 42vw); }
+body.pins-overlay #pin-sidebar { box-shadow: 3px 0 14px #0002; }
+.pin-card { border: 1px solid #d5deea; border-radius: 6px; background: white; margin-bottom: 12px; overflow: hidden; }
+.pin-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #eaf0f8; padding: 7px; cursor: pointer; user-select: none; }
+.pin-title { font-size: 12px; font-weight: 600; flex: 1; }
+.pin-content { padding: 10px; font-size: 13px; overflow-x: auto; }
+.pin-content > :first-child { margin-top: 0; }
+.pin-content > :last-child { margin-bottom: 0; }
+.pin-content pre { padding: 38px 8px 8px; }
+.pin-unavailable { color: #6b7280; font-size: 12px; padding: 10px; white-space: pre-wrap; }
+#pin-status { font-size: 12px; color: #475569; }
+#task-status { position: fixed; top: auto; bottom: 0; right: 0; z-index: 20; padding: 0 8px; max-width: 65vw; }
+::highlight(markdown-pins) { background-color: #dcebff; color: inherit; }

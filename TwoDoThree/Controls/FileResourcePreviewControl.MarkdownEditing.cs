@@ -31,6 +31,7 @@ public partial class FileResourcePreviewControl
     private void PreviewUnloaded(object sender, RoutedEventArgs e)
     {
         DetachMarkdownClosingHandlers();
+        DetachMarkdownSession();
     }
 
     private void DetachMarkdownClosingHandlers()
@@ -67,6 +68,7 @@ public partial class FileResourcePreviewControl
 
     private void InitializeMarkdownSource(MarkdownTaskFile? file)
     {
+        draftPins = markdownSession?.Pins ?? [];
         markdownSourceInitialized = false;
         MarkdownSourceEditor.Text = UseNativeMarkdownRenderer ? file?.Text ?? string.Empty : string.Empty;
         markdownSourceInitialized = UseNativeMarkdownRenderer && file is not null;
@@ -75,6 +77,9 @@ public partial class FileResourcePreviewControl
 
     private void ResetMarkdownEditing()
     {
+        DetachMarkdownSession();
+        pinSidebarOpen = false;
+        pinSidebarScroll = 0;
         markdownEditorOpen = false;
         markdownSourceInitialized = false;
         MarkdownSourceEditor.Visibility = Visibility.Collapsed;
@@ -102,11 +107,13 @@ public partial class FileResourcePreviewControl
         EditMarkdownButton.IsEnabled = !busy && markdownTaskFile is not null;
         MarkdownSourceEditor.IsReadOnly = busy;
         SaveMarkdownButton.IsEnabled = DiscardMarkdownButton.IsEnabled = !busy && HasMarkdownDraft;
+        if (!busy && markdownSession is not null) MarkdownSession_Changed(markdownSession, new(markdownSession.Text));
     }
 
     private async Task<MarkdownViewportAnchor> CaptureMarkdownAnchorAsync()
     {
         if (markdownEditorOpen) return CaptureSourceAnchor();
+        await CapturePinViewAsync();
         try
         {
             return JsonSerializer.Deserialize<MarkdownViewportAnchor>(
@@ -190,9 +197,16 @@ public partial class FileResourcePreviewControl
         if (!HasMarkdownDraft) return true;
         try
         {
-            markdownTaskFile!.SaveText(MarkdownSourceEditor.Text, MaxPreviewBytes);
+            applyingSessionChange = true;
+            if (markdownSession is not null)
+            {
+                markdownSession.SaveText(markdownTaskFile!.Text, MarkdownSourceEditor.Text, draftPins);
+                markdownTaskFile = markdownSession.LoadSnapshot();
+                draftPins = markdownSession.Pins;
+            }
+            else markdownTaskFile!.SaveText(MarkdownSourceEditor.Text, MaxPreviewBytes);
             UpdateMarkdownEditStatus();
-            MarkdownEditStatus.Text = "Saved to the original file.";
+            MarkdownEditStatus.Text = markdownSession?.Error ?? "Saved to the original file.";
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
@@ -200,6 +214,7 @@ public partial class FileResourcePreviewControl
             MarkdownEditStatus.Text = $"Could not save: {ex.Message} Your draft is still available here.";
             return false;
         }
+        finally { applyingSessionChange = false; }
     }
 
     private async void SaveMarkdownButton_Click(object sender, RoutedEventArgs e)
@@ -227,6 +242,7 @@ public partial class FileResourcePreviewControl
             // Reload external changes as well, so Discard can recover from a save conflict.
             var file = MarkdownTaskFile.Load(Resource!.Content, MaxPreviewBytes)
                 ?? throw new IOException("The file is too large or uses an unsupported encoding.");
+            markdownSession?.Refresh();
             markdownTaskFile = file;
             InitializeMarkdownSource(file);
             if (markdownEditorOpen) RestoreSourceAnchor(anchor);

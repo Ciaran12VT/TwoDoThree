@@ -13,6 +13,8 @@
   <ItemGroup>
     <Resource Include="Assets\AppIcon.ico" />
     <None Include="Assets\AppIcon.png" />
+    <EmbeddedResource Include="Assets\MarkdownPins.js" />
+    <EmbeddedResource Include="Assets\MarkdownPins.css" />
   </ItemGroup>
 
   <ItemGroup>

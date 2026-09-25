@@ -13,6 +13,7 @@ public static class AppStoragePaths
     public static string EmailCacheFilePath => Path.Combine(RootDirectory, "email-cache.json");
 
     public static string MsalCacheFileName => "msal.cache";
+    public static string MarkdownPinsDirectory => Path.Combine(RootDirectory, "markdown-pins");
 
     public static void EnsureRootDirectory()
     {
