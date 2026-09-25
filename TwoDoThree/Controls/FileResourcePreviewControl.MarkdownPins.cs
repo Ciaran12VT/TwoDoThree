@@ -57,7 +57,7 @@ public partial class FileResourcePreviewControl
 
     private MarkdownPinPresentation PinPresentation(bool editable) => new(
         HasMarkdownDraft ? draftPins : markdownSession?.Pins ?? [], editable && markdownSession?.Text is not null,
-        pinSidebarOpen, pinSidebarScroll, markdownSession?.Error);
+        pinSidebarOpen, pinSidebarScroll, markdownSession?.Error, markdownSession?.SidebarWidth ?? 330, markdownSession?.Wrap ?? true);
 
     private async Task CapturePinViewAsync()
     {
@@ -80,7 +80,8 @@ public partial class FileResourcePreviewControl
         if (!UseNativeMarkdownRenderer || markdownDocumentId is null || MarkdownBrowser.CoreWebView2 is null) return;
         MarkdownBrowser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
         {
-            documentId = markdownDocumentId, action = "pins", pins = HasMarkdownDraft ? draftPins : markdownSession?.Pins ?? [], error, created
+            documentId = markdownDocumentId, action = "pins", pins = HasMarkdownDraft ? draftPins : markdownSession?.Pins ?? [], error, created,
+            width = markdownSession?.SidebarWidth ?? 330, wrap = markdownSession?.Wrap ?? true
         }, PinJson));
     }
 
@@ -103,8 +104,8 @@ public partial class FileResourcePreviewControl
                 var text = markdownSession!.Text;
                 if (HasMarkdownDraft)
                 {
-                    draftPins = markdownSession.Pins.Select(p => draftPins.SingleOrDefault(d => d.Id == p.Id)
-                        ?? MarkdownPinAnchors.Resolve(p, MarkdownSourceEditor.Text, false)).ToList();
+                    draftPins = markdownSession.Pins.Select(p => (draftPins.SingleOrDefault(d => d.Id == p.Id)
+                        ?? MarkdownPinAnchors.Resolve(p, MarkdownSourceEditor.Text, false)) with { Title = p.Title, Collapsed = p.Collapsed }).ToList();
                     if (text != markdownTaskFile?.Text) MarkdownEditStatus.Text = "The source changed in another window or outside the app. Your draft is kept; Save will check for conflicts.";
                     PostPinUpdate();
                     return;
@@ -152,11 +153,31 @@ public partial class FileResourcePreviewControl
 
     private bool HandlePinMessage(MarkdownPreviewRequest request)
     {
-        if (request.action is not ("pinSelection" or "unpin")) return false;
+        if (request.action is not ("pinSelection" or "unpin" or "pinPreferences" or "renamePin" or "collapsePin" or "clearPins")) return false;
         if (!UseNativeMarkdownRenderer || markdownSession is null) return true;
         try
         {
-            if (request.action == "unpin")
+            if (request.action == "clearPins")
+            {
+                var session = markdownSession;
+                if (session.Pins.Count > 0 && MessageBox.Show(Window.GetWindow(this),
+                    $"Clear all pins for the current document, '{Path.GetFileName(session.Path)}'?\n\nThis includes collapsed and unavailable pins. The source document stays unchanged.\n\n{session.Path}",
+                    "Clear all pins", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK)
+                    session.ClearPins();
+            }
+            else if (request.action == "renamePin")
+            {
+                markdownSession.RenamePin(request.pinId ?? "", request.title ?? "");
+            }
+            else if (request.action == "collapsePin")
+            {
+                markdownSession.SetPinCollapsed(request.pinId ?? "", request.collapsed ?? false);
+            }
+            else if (request.action == "pinPreferences")
+            {
+                markdownSession.SetViewPreferences(request.width ?? 330, request.wrap ?? true);
+            }
+            else if (request.action == "unpin")
             {
                 if (request.pinId is not null) markdownSession.Unpin(request.pinId);
             }

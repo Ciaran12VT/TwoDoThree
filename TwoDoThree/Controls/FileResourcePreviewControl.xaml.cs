@@ -343,7 +343,7 @@ public partial class FileResourcePreviewControl : UserControl
     }
 
     private sealed record MarkdownPreviewRequest(string? documentId, string? action, int id, string? text, int? position, bool? isChecked,
-        string? pinId, double? start, double? end);
+        string? pinId, double? start, double? end, double? width, bool? wrap, string? title, bool? collapsed);
 
     private static string ReadTextPreview(string path)
     {

@@ -11,6 +11,7 @@ public partial class FileResourcePreviewControl
 {
     private bool markdownModeChanging;
     private bool markdownSourceInitialized;
+    private double? restoredSourceEndOffset;
     private readonly List<Window> markdownOwners = [];
     private bool HasMarkdownDraft => markdownSourceInitialized && markdownTaskFile is not null
         && MarkdownSourceEditor.Text != markdownTaskFile.Text;
@@ -68,6 +69,7 @@ public partial class FileResourcePreviewControl
 
     private void InitializeMarkdownSource(MarkdownTaskFile? file)
     {
+        restoredSourceEndOffset = null;
         draftPins = markdownSession?.Pins ?? [];
         markdownSourceInitialized = false;
         MarkdownSourceEditor.Text = UseNativeMarkdownRenderer ? file?.Text ?? string.Empty : string.Empty;
@@ -88,6 +90,7 @@ public partial class FileResourcePreviewControl
 
     private void MarkdownSourceEditor_TextChanged(object? sender, EventArgs e)
     {
+        restoredSourceEndOffset = null;
         if (markdownSourceInitialized) UpdateMarkdownEditStatus();
     }
 
@@ -135,7 +138,11 @@ public partial class FileResourcePreviewControl
         var line = view.GetDocumentLineByVisualTop(y);
         var lineTop = view.GetVisualTopByDocumentLine(line.LineNumber);
         var fraction = Math.Clamp((y - lineTop) / view.DefaultLineHeight, 0, .999999);
-        var atEnd = top + view.ActualHeight >= view.DocumentHeight - 1;
+        // Keep an explicit end anchor while the editor remains at the restored
+        // position. Auto horizontal-scrollbar measurement may clamp it just short
+        // of the final extent; this must not turn an unchanged end into a line anchor.
+        var atEnd = top + view.ActualHeight >= view.DocumentHeight - 1
+            || restoredSourceEndOffset is { } restored && Math.Abs(top - restored) < 1;
         return new(line.LineNumber + fraction, .2, atEnd ? "end" : null);
     }
 
@@ -144,6 +151,7 @@ public partial class FileResourcePreviewControl
         MarkdownSourceEditor.UpdateLayout();
         var view = MarkdownSourceEditor.TextArea.TextView;
         if (anchor.edge == "start") { MarkdownSourceEditor.ScrollToVerticalOffset(0); return; }
+        restoredSourceEndOffset = null;
         if (anchor.edge == "end") { MarkdownSourceEditor.ScrollToEnd(); return; }
         var line = Math.Clamp((int)anchor.line, 1, MarkdownSourceEditor.Document.LineCount);
         var top = view.GetVisualTopByDocumentLine(line) + (anchor.line - Math.Floor(anchor.line)) * view.DefaultLineHeight;
@@ -168,6 +176,9 @@ public partial class FileResourcePreviewControl
                 markdownEditorOpen = true;
                 MarkdownSourceEditor.Visibility = Visibility.Visible;
                 EditMarkdownButton.Content = "Preview";
+                // The source-mode status adds a footer row. Lay it out before
+                // restoring the viewport, including the exact document end.
+                UpdateMarkdownEditStatus();
                 MarkdownSourceEditor.CaretOffset = MarkdownSourceEditor.Document.GetLineByNumber(
                     Math.Clamp((int)anchor.line, 1, MarkdownSourceEditor.Document.LineCount)).Offset;
                 MarkdownSourceEditor.Focus();
@@ -175,6 +186,11 @@ public partial class FileResourcePreviewControl
                 // Restore the passage after that work so it cannot reset our viewport.
                 await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
                 RestoreSourceAnchor(anchor);
+                if (anchor.edge == "end")
+                {
+                    await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+                    restoredSourceEndOffset = MarkdownSourceEditor.VerticalOffset;
+                }
             }
             else
             {

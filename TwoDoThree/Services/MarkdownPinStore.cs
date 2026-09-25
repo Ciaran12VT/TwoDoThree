@@ -21,8 +21,10 @@ public sealed class MarkdownPinStore(string? directory = null)
         var metadata = JsonSerializer.Deserialize<MarkdownPinMetadata>(File.ReadAllText(file))
             ?? throw new IOException("Pin metadata is empty.");
         if (metadata.Version != 1 || !string.Equals(metadata.DocumentPath, CanonicalPath(path), StringComparison.OrdinalIgnoreCase)
+            || !double.IsFinite(metadata.SidebarWidth) || metadata.SidebarWidth < 180 || metadata.SidebarWidth > 1600
             || metadata.Pins.Count > 100 || metadata.Pins.Select(p => p.Id).Distinct().Count() != metadata.Pins.Count
-            || metadata.Pins.Any(p => !Guid.TryParse(p.Id, out _) || !double.IsFinite(p.Start) || !double.IsFinite(p.End) || p.Start < 0 || p.End <= p.Start))
+            || metadata.Pins.Any(p => !Guid.TryParse(p.Id, out _) || !double.IsFinite(p.Start) || !double.IsFinite(p.End) || p.Start < 0 || p.End <= p.Start
+                || p.Title is not null && (string.IsNullOrWhiteSpace(p.Title) || p.Title.Length > 200 || p.Title.Any(char.IsControl))))
             throw new IOException("Pin metadata has an unsupported format. The existing metadata has been preserved.");
         return metadata;
     }

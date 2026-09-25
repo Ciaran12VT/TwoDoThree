@@ -30,7 +30,9 @@ internal static class Program
             var directory = Directory.CreateTempSubdirectory("2do3-popout-smoke-");
             var path = Path.Combine(directory.FullName, "sample.md");
             File.WriteAllText(path, "# Rendered heading\n\n- [ ] Saved task\n\n```sql\nSELECT 1;\n```\n"
-                + string.Concat(Enumerable.Range(1, 80).Select(i => $"\n## Section {i}\n\nParagraph with **formatted passage {i}** and a [link](https://example.com).\n\n- Item {i}\n- Another item\n\n```sql\nSELECT {i};\nSELECT 'second line';\n```\n")));
+                + string.Concat(Enumerable.Range(1, 80).Select(i => $"\n## Section {i}\n\nParagraph with **formatted passage {i}** and a [link](https://example.com).\n\n- Item {i}\n- Another item\n\n```sql\nSELECT {i};\nSELECT 'second line';\n```\n"))
+                + "\n## Long excerpts\n\n" + string.Concat(Enumerable.Repeat("Long prose with several words. ", 25))
+                + "\n\n- " + string.Concat(Enumerable.Repeat("Long list text. ", 30)) + "\n\n```sql\nSELECT '" + new string('x', 250) + "';\n```\n");
             TaskDetailWindow? owner = null;
             var popouts = new List<ResourcePopoutWindow>();
             try
@@ -54,7 +56,8 @@ internal static class Program
                 var expand = Descendants(owner).OfType<Button>().Single(b => b.ToolTip as string == "Expand Resource");
                 // The embedded browser MUST initialize first. Opening a popout alone misses
                 // the incompatible native/composition default-environment regression.
-                for (int index = 0; index < 2; index++)
+                bool manualPins = Environment.GetCommandLineArgs().Contains("--manual-pins");
+                for (int index = 0; index < (manualPins ? 1 : 2); index++)
                 {
                     expand.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var popout = owner.OwnedWindows.OfType<ResourcePopoutWindow>().Single(w => !popouts.Contains(w));
@@ -70,7 +73,7 @@ internal static class Program
                         "Expanded view renders through native WebView2 without drops");
                     Check(native.CoreWebView2.Environment.UserDataFolder != composition.CoreWebView2.Environment.UserDataFolder,
                         "Native and composition browsers use separate user-data folders");
-                    Check(await native.ExecuteScriptAsync("document.querySelectorAll('.copy-code').length") == "81",
+                    Check(await native.ExecuteScriptAsync("document.querySelectorAll('.copy-code').length") == "82",
                         "Code copy control is rendered");
                     Check(((TextBox)preview.FindName("PreviewTextBox")).Visibility == Visibility.Collapsed,
                         "Plain-text fallback is hidden");
@@ -78,11 +81,31 @@ internal static class Program
 
                 var firstPreview = Descendants(popouts[0]).OfType<FileResourcePreviewControl>().Single();
                 var firstBrowser = (WebView2)firstPreview.FindName("NativeMarkdownWebView");
+                if (manualPins)
+                {
+                    var window = popouts[0];
+                    window.Title = "Markdown pins - isolated input probe";
+                    window.Left = 100; window.Top = 100; window.Width = 1000; window.Height = 750;
+                    Directory.CreateDirectory("artifacts/MarkdownPopoutSmoke");
+                    var stop = "artifacts/MarkdownPopoutSmoke/stop-probe";
+                    if (File.Exists(stop)) File.Delete(stop);
+                    await firstBrowser.ExecuteScriptAsync("window.inputTrace=[];for(const t of ['pointerdown','pointermove','pointerup','pointercancel','mousedown','dragstart','dragenter','dragover','dragleave','drop','dragend'])document.addEventListener(t,e=>inputTrace.push({type:t,trusted:e.isTrusted,x:e.clientX,y:e.clientY,selection:getSelection().toString(),target:e.target.tagName}),true)");
+                    Console.WriteLine("MANUAL PROBE READY: isolated temporary file, close with artifacts/MarkdownPopoutSmoke/stop-probe");
+                    while (!File.Exists(stop))
+                    {
+                        await Task.Delay(500);
+                        File.WriteAllText("artifacts/MarkdownPopoutSmoke/input-trace.json", await firstBrowser.ExecuteScriptAsync("({events:inputTrace,pins:pins.length,open:sidebarOpen,active:!!activePinDrag})"));
+                    }
+                    return;
+                }
                 await firstBrowser.ExecuteScriptAsync("document.querySelector('.markdown-task').click()");
                 await WaitUntil(async () => await firstBrowser.ExecuteScriptAsync("document.getElementById('task-status').textContent") == "\"Task saved.\"");
                 Check(File.ReadAllText(path).Contains("[x] Saved task"), "Native checkbox saves to the original file");
                 var secondPreview = Descendants(popouts[1]).OfType<FileResourcePreviewControl>().Single();
-                await PinChecks.Run(firstPreview, firstBrowser, (WebView2)secondPreview.FindName("NativeMarkdownWebView"), path);
+                if (Environment.GetCommandLineArgs().Contains("--management-only"))
+                    await PinManagementChecks.Run(firstPreview, firstBrowser, (WebView2)secondPreview.FindName("NativeMarkdownWebView"), path);
+                else if (!Environment.GetCommandLineArgs().Contains("--inline-only"))
+                    await PinChecks.Run(firstPreview, firstBrowser, (WebView2)secondPreview.FindName("NativeMarkdownWebView"), path);
                 await CheckInlineEditing(firstPreview, firstBrowser, path);
                 await Rendered(composition, embedded);
                 Console.WriteLine("PASS: embedded-first initialization and simultaneous native popouts");
@@ -195,6 +218,11 @@ internal static class Program
         await ToSource();
         await ToPreview();
         Check((await BrowserAnchor()).edge == "end", "End-of-document position survives both modes");
+        await ToSource();
+        editor.ScrollToVerticalOffset(editor.VerticalOffset - 500);
+        await Task.Delay(100);
+        await ToPreview();
+        Check((await BrowserAnchor()).edge != "end", "Scrolling away in source mode releases the restored end anchor");
         await browser.ExecuteScriptAsync("scrollTo(0, 0)");
         await ToSource();
         await ToPreview();
@@ -267,7 +295,8 @@ internal static class Program
             var details = ((TextBlock)preview.FindName("DetailsBlock")).Text;
             if (details.Contains("Formatted Markdown preview is unavailable")) throw new Exception(details);
             return browser.CoreWebView2 is not null
-                && await browser.ExecuteScriptAsync("document.querySelector('h1')?.textContent") == "\"Rendered heading\"";
+                && await browser.ExecuteScriptAsync("document.querySelector('h1')?.textContent") == "\"Rendered heading\""
+                && ((TextBox)preview.FindName("PreviewTextBox")).Visibility == Visibility.Collapsed;
         });
     }
 

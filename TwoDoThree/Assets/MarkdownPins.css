@@ -2,19 +2,50 @@
 #markdown-main > :first-child { margin-top: 0; }
 body.has-pins { padding-top: 48px; }
 .pin-toolbar { position: fixed; left: 8px; top: 6px; z-index: 10; display: flex; gap: 5px; }
-.pin-toolbar button, .pin-header button { font: 12px 'Segoe UI', sans-serif; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; cursor: pointer; }
+.pin-toolbar button, .pin-header button { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; min-height: 30px; font: 12px 'Segoe UI', sans-serif; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; cursor: pointer; }
+.pin-toolbar svg, .pin-header svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pin-toolbar button:focus-visible, .pin-header button:focus-visible, #pin-divider:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
 .pin-toolbar button:disabled { opacity: .55; cursor: default; }
-#pin-sidebar { display: none; position: fixed; left: 0; top: 40px; bottom: 0; width: min(330px, 40vw); box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: #f3f6fa; border-right: 1px solid #d8e0eb; z-index: 8; }
+#pin-sidebar { display: none; position: fixed; left: 0; top: 40px; bottom: 0; width: var(--pin-width,330px); box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: #f3f6fa; border-right: 1px solid #d8e0eb; z-index: 8; }
 body.pins-open #pin-sidebar { display: block; }
-body.pins-open:not(.pins-overlay) #markdown-main { margin-left: min(350px, 42vw); }
+body.pins-open:not(.pins-overlay) #markdown-main { margin-left: calc(var(--pin-width,330px) + 12px); }
 body.pins-overlay #pin-sidebar { box-shadow: 3px 0 14px #0002; }
+#pin-divider { display: none; position: fixed; top: 40px; bottom: 0; left: calc(var(--pin-width,330px) - 3px); width: 7px; cursor: col-resize; touch-action: none; background: #e2e8f0; z-index: 9; }
+#pin-divider::after { content: ''; position: absolute; top: 50%; left: 2px; width: 3px; height: 32px; border-radius: 2px; background: #94a3b8; }
+body.pins-open:not(.pins-overlay) #pin-divider { display: block; }
+#pin-divider:hover, #pin-divider:focus-visible, .pin-resizing #pin-divider { background: #93b4df; }
+.pin-resizing, .pin-resizing * { cursor: col-resize !important; user-select: none !important; }
+.pin-wrap-control { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
 .pin-card { border: 1px solid #d5deea; border-radius: 6px; background: white; margin-bottom: 12px; overflow: hidden; }
 .pin-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #eaf0f8; padding: 7px; cursor: pointer; user-select: none; }
-.pin-title { font-size: 12px; font-weight: 600; flex: 1; }
+.pin-title { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pin-header button { flex-shrink: 0; }
 .pin-content { padding: 10px; font-size: 13px; overflow-x: auto; }
 .pin-content > :first-child { margin-top: 0; }
 .pin-content > :last-child { margin-bottom: 0; }
 .pin-content pre { padding: 38px 8px 8px; }
+.pin-content pre, .pin-content span[data-run] { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pins-nowrap .pin-content { white-space: nowrap; overflow-wrap: normal; }
+.pins-nowrap .pin-content pre, .pins-nowrap .pin-content span[data-run] { white-space: pre; overflow-wrap: normal; }
+.pin-content pre { overflow-x: visible; }
+.pins-nowrap .pin-content .code-block { min-width: max-content; }
+.pin-content .copy-code { position: sticky; float: right; margin: 7px; top: 7px; right: 0; }
+.pin-context-menu { position: fixed; z-index: 30; padding: 5px; background: white; box-shadow: 0 2px 12px #0003; border: 1px solid #cbd5e1; border-radius: 5px; }
+.pin-context-menu button { border: 0; background: white; padding: 7px; cursor: pointer; }
+.pin-context-menu button:hover, .pin-context-menu button:focus { background: #eaf0f8; }
+.pin-sidebar-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+#pin-clear, .pin-dialog-actions button { padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; font: 12px 'Segoe UI',sans-serif; cursor: pointer; }
+#pin-clear:disabled { opacity: .5; cursor: default; }
+#pin-rename-dialog { width: min(350px,80vw); padding: 20px; border: 1px solid #cbd5e1; border-radius: 8px; }
+#pin-rename-dialog::backdrop { background: #0005; }
+#pin-rename-dialog h2 { font-size: 18px; margin-top: 0; }
+#pin-title-input { box-sizing: border-box; width: 100%; padding: 7px; font: inherit; }
+#pin-title-error { font-size: 12px; color: #b91c1c; }
+.pin-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+#pin-menu kbd { margin-left: 12px; color: #64748b; font-size: 11px; }
+#pin-drag-hint { position: fixed; z-index: 40; pointer-events: none; padding: 5px 9px; border-radius: 5px; background: #1e40af; color: white; font-size: 12px; }
+.pin-dragging, .pin-dragging * { cursor: grabbing !important; }
+#pin-sidebar.pin-drop-target { box-shadow: inset 0 0 0 2px #60a5fa; }
 .pin-unavailable { color: #6b7280; font-size: 12px; padding: 10px; white-space: pre-wrap; }
 #pin-status { font-size: 12px; color: #475569; }
 #task-status { position: fixed; top: auto; bottom: 0; right: 0; z-index: 20; padding: 0 8px; max-width: 65vw; }

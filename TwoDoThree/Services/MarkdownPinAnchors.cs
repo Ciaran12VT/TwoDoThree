@@ -33,9 +33,11 @@ public static class MarkdownPinAnchors
 
     public static MarkdownPin Resolve(MarkdownPin pin, string? text, bool identicalSource)
     {
-        if (text is null) return pin with { Unavailable = "Source file is missing or inaccessible." };
+        if (text is null) return pin with { Unavailable = pin.Unavailable ?? "Source file is missing or inaccessible." };
         if (pin.Unavailable?.StartsWith("The pinned passage was deleted", StringComparison.Ordinal) == true) return pin;
-        if (identicalSource) return Capture(pin, text);
+        // Metadata-only actions may save an unresolved pin alongside the current
+        // source hash. That hash does not make its stale offsets trustworthy.
+        if (identicalSource && (pin.Unavailable is null || pin.Unavailable.StartsWith("Source file is missing", StringComparison.Ordinal))) return Capture(pin, text);
         if (pin.Quote.Length == 0) return pin with { Unavailable = "Passage cannot be located." };
         var candidates = new List<int>();
         for (int at = 0; at <= text.Length - pin.Quote.Length;)

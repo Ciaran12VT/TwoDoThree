@@ -48,6 +48,22 @@ public sealed class MarkdownDocumentSession
 
     public string? Text { get { lock (gate) return file?.Text; } }
     public List<MarkdownPin> Pins { get { lock (gate) return metadata.Pins.ToList(); } }
+    public double SidebarWidth { get { lock (gate) return metadata.SidebarWidth; } }
+    public bool Wrap { get { lock (gate) return metadata.Wrap; } }
+
+    public void SetViewPreferences(double width, bool wrap)
+    {
+        if (!double.IsFinite(width) || width < 180 || width > 1600) throw new ArgumentException("Invalid sidebar width.");
+        lock (gate)
+        {
+            if (!metadataReadable) throw new IOException(Error);
+            var updated = metadata with { SidebarWidth = width, Wrap = wrap };
+            store.Save(updated);
+            metadata = updated;
+            Error = null;
+        }
+        Changed?.Invoke(this, new(Text));
+    }
     public MarkdownTaskFile? LoadSnapshot() { lock (gate) return file is null ? null : MarkdownTaskFile.Load(Path, Limit); }
 
     public void Refresh()
@@ -86,7 +102,7 @@ public sealed class MarkdownDocumentSession
     private void Persist(List<MarkdownPin> pins)
     {
         if (!metadataReadable) throw new IOException(Error);
-        var updated = metadata with { Pins = pins, SourceHash = MarkdownPinAnchors.Hash(file?.Text ?? "") };
+        var updated = metadata with { Pins = pins, SourceHash = file is null ? metadata.SourceHash : MarkdownPinAnchors.Hash(file.Text) };
         store.Save(updated);
         metadata = updated;
         Error = null;
@@ -109,6 +125,32 @@ public sealed class MarkdownDocumentSession
     public void Unpin(string id)
     {
         lock (gate) Persist(metadata.Pins.Where(p => p.Id != id).ToList());
+        Changed?.Invoke(this, new(Text));
+    }
+
+    public void RenamePin(string id, string title)
+    {
+        title = title.Trim();
+        if (title.Length is 0 or > 200 || title.Any(char.IsControl))
+            throw new ArgumentException("Enter a title of 1 to 200 characters on one line.");
+        UpdatePin(id, pin => pin with { Title = title });
+    }
+
+    public void SetPinCollapsed(string id, bool collapsed) => UpdatePin(id, pin => pin with { Collapsed = collapsed });
+
+    private void UpdatePin(string id, Func<MarkdownPin, MarkdownPin> update)
+    {
+        lock (gate)
+        {
+            if (!metadata.Pins.Any(p => p.Id == id)) throw new IOException("This pin no longer exists.");
+            Persist(metadata.Pins.Select(p => p.Id == id ? update(p) : p).ToList());
+        }
+        Changed?.Invoke(this, new(Text));
+    }
+
+    public void ClearPins()
+    {
+        lock (gate) Persist([]);
         Changed?.Invoke(this, new(Text));
     }
 
@@ -138,8 +180,8 @@ public sealed class MarkdownDocumentSession
         {
             RequireCurrent(expected);
             file!.SaveText(text, Limit);
-            var pins = metadata.Pins.Select(p => draftPins.SingleOrDefault(d => d.Id == p.Id)
-                ?? MarkdownPinAnchors.Resolve(p, text, false)).ToList();
+            var pins = metadata.Pins.Select(p => (draftPins.SingleOrDefault(d => d.Id == p.Id)
+                ?? MarkdownPinAnchors.Resolve(p, text, false)) with { Title = p.Title, Collapsed = p.Collapsed }).ToList();
             try { Persist(pins); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Error = "Source saved, but pins could not be saved: " + e.Message; metadata = metadata with { Pins = pins }; }
         }

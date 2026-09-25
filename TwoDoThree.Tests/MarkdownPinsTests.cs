@@ -6,6 +6,100 @@ namespace TwoDoThree.Tests;
 
 public class MarkdownPinsTests
 {
+    [Fact]
+    public void PinNamesCollapseAndClearAreMetadataOnlyAndPreservePreferences()
+    {
+        WithFile("A pinned passage here", (path,store) =>
+        {
+            var session=new MarkdownDocumentSession(path,store);
+            session.AddPin(session.Text!,2,16,"pinned passage");
+            var pin=session.Pins.Single();
+            var bytes=File.ReadAllBytes(path);
+            session.SetViewPreferences(430,false);
+            session.RenamePin(pin.Id,"  <b>Review & check</b>  ");
+            session.SetPinCollapsed(pin.Id,true);
+            var saved=new MarkdownDocumentSession(path,store).Pins.Single();
+            Assert.Equal("<b>Review & check</b>",saved.Title); Assert.True(saved.Collapsed);
+            Assert.Throws<ArgumentException>(()=>session.RenamePin(pin.Id,"  "));
+            Assert.Throws<ArgumentException>(()=>session.RenamePin(pin.Id,"one\ntwo"));
+            Assert.Throws<ArgumentException>(()=>session.RenamePin(pin.Id,new string('x',201)));
+            Assert.Throws<IOException>(()=>session.RenamePin(Guid.NewGuid().ToString("N"),"missing"));
+            session.ClearPins();
+            var empty=new MarkdownDocumentSession(path,store);
+            Assert.Empty(empty.Pins); Assert.Equal(430,empty.SidebarWidth); Assert.False(empty.Wrap);
+            Assert.Equal(bytes,File.ReadAllBytes(path));
+        });
+    }
+
+    [Fact]
+    public void DraftSaveKeepsConcurrentPinMetadataChangesAndDoesNotResurrectClearedPins()
+    {
+        WithFile("A pinned passage here", (path,store) =>
+        {
+            var session=new MarkdownDocumentSession(path,store);
+            session.AddPin(session.Text!,2,16,"pinned passage");
+            var original=session.Text!;
+            var draft="new " + original;
+            var stale=MarkdownPinAnchors.ApplyEdit(session.Pins.Single(),0,0,4,draft);
+            session.RenamePin(stale.Id,"Updated elsewhere"); session.SetPinCollapsed(stale.Id,true);
+            session.SaveText(original,draft,[stale]);
+            Assert.Equal("Updated elsewhere",session.Pins.Single().Title);
+            Assert.True(session.Pins.Single().Collapsed); Assert.Equal(6,session.Pins.Single().Start);
+            session.ClearPins(); session.SaveText(draft,draft+" edited",[stale]);
+            Assert.Empty(session.Pins);
+        });
+    }
+
+    [Fact]
+    public void MetadataChangesDoNotReviveAmbiguousPinsAndClearIsDocumentScoped()
+    {
+        WithFile("prefix passage suffix", (path,store) =>
+        {
+            var session=new MarkdownDocumentSession(path,store);
+            session.AddPin(session.Text!,7,14,"passage");
+            var id=session.Pins.Single().Id;
+            File.AppendAllText(path,"\nprefix passage suffix"); session.Refresh();
+            Assert.NotNull(session.Pins.Single().Unavailable);
+            session.RenamePin(id,"Unavailable item"); session.SetPinCollapsed(id,true);
+            Assert.NotNull(new MarkdownDocumentSession(path,store).Pins.Single().Unavailable);
+            var ambiguous=File.ReadAllText(path);
+            File.Delete(path); session.Refresh(); session.RenamePin(id,"Still unavailable");
+            File.WriteAllText(path,ambiguous); session.Refresh();
+            Assert.NotNull(new MarkdownDocumentSession(path,store).Pins.Single().Unavailable);
+            var otherPath=path+".md";
+            try
+            {
+                File.WriteAllText(otherPath,"Other passage");
+                var other=new MarkdownDocumentSession(otherPath,store);
+                other.AddPin(other.Text!,0,5,"Other");
+                session.ClearPins();
+                Assert.Empty(new MarkdownDocumentSession(path,store).Pins);
+                Assert.Single(new MarkdownDocumentSession(otherPath,store).Pins);
+            }
+            finally { File.Delete(otherPath); }
+        });
+    }
+    [Fact]
+    public void ViewPreferencesPersistWithoutChangingSourceOrAnchors()
+    {
+        WithFile("Some text", (path,store) =>
+        {
+            var session=new MarkdownDocumentSession(path,store);
+            Assert.Equal(330,session.SidebarWidth); Assert.True(session.Wrap);
+            session.AddPin(session.Text!,0,4,"Some");
+            var hash=store.Load(path).SourceHash;
+            var bytes=File.ReadAllBytes(path);
+            session.SetViewPreferences(420,false);
+            var reloaded=new MarkdownDocumentSession(path,store);
+            Assert.Equal(420,reloaded.SidebarWidth); Assert.False(reloaded.Wrap);
+            Assert.Equal(hash,store.Load(path).SourceHash);
+            Assert.Equal(bytes,File.ReadAllBytes(path));
+            session.Unpin(session.Pins.Single().Id);
+            Assert.Equal(420,store.Load(path).SidebarWidth);
+            Assert.Throws<ArgumentException>(()=>session.SetViewPreferences(double.NaN,true));
+            Assert.Throws<ArgumentException>(()=>session.SetViewPreferences(10,true));
+        });
+    }
     [Theory]
     [InlineData("A **formatted passage** follows", "matted pass")]
     [InlineData("```sql\nselect 'value';\n```", "select 'val")]

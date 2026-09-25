@@ -16,6 +16,30 @@ public static class MarkdownPreviewHtml
     }
     private static readonly string PinScript = Asset("MarkdownPins.js");
     private static readonly string PinStyles = Asset("MarkdownPins.css");
+    private const string PinMarkup = """
+<nav class="pin-toolbar" aria-label="Pinned excerpts">
+  <button id="pin-toggle" aria-label="Toggle pinned excerpts" title="Show or hide pinned excerpts" aria-controls="pin-sidebar" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+</nav>
+<aside id="pin-sidebar" aria-label="Pinned excerpts">
+  <div class="pin-sidebar-controls">
+    <label class="pin-wrap-control" title="Wrap pinned text and code to the sidebar width"><input id="pin-wrap" type="checkbox" checked> Wrap text</label>
+    <button id="pin-clear" type="button" title="Clear all pins for this document">Clear all pins</button>
+  </div>
+  <p id="pin-status" role="status"></p><div id="pin-list"></div>
+</aside>
+<div id="pin-divider" role="separator" aria-label="Resize pinned excerpts" aria-orientation="vertical" tabindex="0"></div>
+<div id="pin-menu" class="pin-context-menu" role="menu" hidden><button id="pin-selection" role="menuitem" aria-keyshortcuts="Alt+Shift+P">Pin selected text <kbd>Alt+Shift+P</kbd></button></div>
+<div id="pin-card-menu" class="pin-context-menu" role="menu" hidden><button id="pin-rename" role="menuitem">Rename</button></div>
+<dialog id="pin-rename-dialog" aria-labelledby="pin-rename-heading">
+  <form id="pin-rename-form">
+    <h2 id="pin-rename-heading">Rename pin</h2>
+    <label for="pin-title-input">Title</label><input id="pin-title-input" maxlength="200" required autocomplete="off">
+    <p id="pin-title-error" role="alert"></p>
+    <div class="pin-dialog-actions"><button id="pin-rename-cancel" type="button">Cancel</button><button type="submit">Save</button></div>
+  </form>
+</dialog>
+<div id="pin-drag-hint" aria-hidden="true" hidden>Drop in pinned excerpts</div>
+""";
     internal static MarkdownDocument ParseDocument(string source) => Markdown.Parse(source, Pipeline);
     // Enable document formatting without allowing embedded HTML or arbitrary attributes.
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
@@ -118,7 +142,7 @@ pre code { padding: 0; background: transparent; }
 </head>
 <body class="{{(includeSourceMap ? "has-pins" : "")}}">
 <div id="task-status" role="status" aria-live="polite"></div>
-{{(includeSourceMap ? "<nav class='pin-toolbar' aria-label='Pinned excerpts'><button id='pin-toggle' aria-controls='pin-sidebar' aria-expanded='false'>Pins</button><button id='pin-selection'>Pin selection</button></nav><aside id='pin-sidebar' aria-label='Pinned excerpts'><p id='pin-status' role='status'></p><div id='pin-list'></div></aside>" : "")}}
+{{(includeSourceMap ? PinMarkup : "")}}
 <main id="markdown-main">
 {{body}}
 </main>
@@ -215,7 +239,7 @@ const pinConfig = {{System.Text.Json.JsonSerializer.Serialize(pinState ?? new Ma
 {{(includeSourceMap ? PinScript : "")}}
 window.chrome.webview.addEventListener('message', ({ data }) => {
     if (data.documentId !== documentId) return;
-    if (data.action === 'pins') { if (typeof updateMarkdownPins === 'function') updateMarkdownPins(data.pins, data.error, data.created); return; }
+    if (data.action === 'pins') { if (typeof updateMarkdownPins === 'function') updateMarkdownPins(data.pins, data.error, data.created, data.width, data.wrap); return; }
     if (data.action === 'taskSync') {
         tasks().filter(t => Number(t.dataset.position) === data.position).forEach(t => t.checked = data.isChecked);
         return;

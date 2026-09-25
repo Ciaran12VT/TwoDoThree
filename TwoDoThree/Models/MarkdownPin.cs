@@ -11,6 +11,8 @@ public sealed record MarkdownPin
     public string SelectedText { get; init; } = "";
     public int Order { get; init; }
     public string? Unavailable { get; init; }
+    public string? Title { get; init; }
+    public bool Collapsed { get; init; }
 }
 
 public sealed record MarkdownPinMetadata
@@ -19,4 +21,6 @@ public sealed record MarkdownPinMetadata
     public string DocumentPath { get; init; } = "";
     public string SourceHash { get; init; } = "";
     public List<MarkdownPin> Pins { get; init; } = [];
+    public double SidebarWidth { get; init; } = 330;
+    public bool Wrap { get; init; } = true;
 }
