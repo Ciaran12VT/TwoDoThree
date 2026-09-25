@@ -23,6 +23,7 @@
                      BorderThickness="0" Background="Transparent" />
             <wv2:WebView2CompositionControl x:Name="PdfWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
             <wv2:WebView2CompositionControl x:Name="MarkdownWebView" Visibility="Collapsed" AllowDrop="True" AllowExternalDrop="False" />
+            <wv2:WebView2 x:Name="NativeMarkdownWebView" Visibility="Collapsed" AllowDrop="False" AllowExternalDrop="False" />
         </Grid>
     </Grid>
 </UserControl>

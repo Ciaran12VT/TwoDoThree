@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Xml;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using TwoDoThree.Models;
 using TwoDoThree.Services;
 using TwoDoThree.Views;
@@ -25,6 +26,21 @@ public partial class FileResourcePreviewControl : UserControl
     private Task? markdownTaskSave;
     private bool markdownEditorOpen;
 
+    // Embedded previews retain composition rendering for WPF drop routing. Expanded
+    // Markdown opts into the native surface; all document behavior stays shared.
+    public static readonly DependencyProperty UseNativeMarkdownRendererProperty = DependencyProperty.Register(
+        nameof(UseNativeMarkdownRenderer), typeof(bool), typeof(FileResourcePreviewControl),
+        new PropertyMetadata(false, OnResourceChanged));
+
+    public bool UseNativeMarkdownRenderer
+    {
+        get => (bool)GetValue(UseNativeMarkdownRendererProperty);
+        set => SetValue(UseNativeMarkdownRendererProperty, value);
+    }
+
+    private IWebView2 MarkdownBrowser => UseNativeMarkdownRenderer ? NativeMarkdownWebView : MarkdownWebView;
+    private FrameworkElement MarkdownSurface => (FrameworkElement)MarkdownBrowser;
+
     public static readonly DependencyProperty ResourceProperty = DependencyProperty.Register(
         nameof(Resource), typeof(ResourceItem), typeof(FileResourcePreviewControl),
         new PropertyMetadata(null, OnResourceChanged));
@@ -35,6 +51,8 @@ public partial class FileResourcePreviewControl : UserControl
         Loaded += (_, _) => _ = LoadPreviewAsync();
         MarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
         MarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
+        NativeMarkdownWebView.CoreWebView2InitializationCompleted += MarkdownWebView_InitializationCompleted;
+        NativeMarkdownWebView.NavigationStarting += MarkdownWebView_NavigationStarting;
     }
 
     public ResourceItem? Resource
@@ -57,6 +75,7 @@ public partial class FileResourcePreviewControl : UserControl
         EditMarkdownButton.Visibility = Visibility.Collapsed;
         markdownNavigationPending = false;
         MarkdownWebView.Visibility = Visibility.Collapsed;
+        NativeMarkdownWebView.Visibility = Visibility.Collapsed;
         PdfWebView.Visibility = Visibility.Collapsed;
         PreviewTextBox.Visibility = Visibility.Visible;
         if (resource is null)
@@ -151,19 +170,20 @@ public partial class FileResourcePreviewControl : UserControl
             var documentId = Guid.NewGuid().ToString("N");
             var html = await Task.Run(() => MarkdownPreviewHtml.CreateDisplayDocument(markdown, documentId, editableTasks));
             if (version != previewVersion) return;
-            MarkdownWebView.Visibility = Visibility.Visible;
-            await MarkdownWebView.EnsureCoreWebView2Async();
+            var browser = MarkdownBrowser;
+            MarkdownSurface.Visibility = Visibility.Visible;
+            await browser.EnsureCoreWebView2Async();
             if (version != previewVersion) return;
             markdownDocumentId = documentId;
             markdownNavigationPending = true;
-            MarkdownWebView.NavigateToString(html);
-            MarkdownWebView.Visibility = Visibility.Visible;
+            browser.NavigateToString(html);
+            MarkdownSurface.Visibility = Visibility.Visible;
             PreviewTextBox.Visibility = Visibility.Collapsed;
         }
         catch (Exception)
         {
             if (version != previewVersion) return;
-            MarkdownWebView.Visibility = Visibility.Collapsed;
+            MarkdownSurface.Visibility = Visibility.Collapsed;
             markdownDocumentId = null;
             markdownNavigationPending = false;
             DetailsBlock.Text += "\nFormatted Markdown preview is unavailable. Showing plain text.";
@@ -173,7 +193,7 @@ public partial class FileResourcePreviewControl : UserControl
     private void MarkdownWebView_InitializationCompleted(object? sender, CoreWebView2InitializationCompletedEventArgs e)
     {
         if (!e.IsSuccess) return;
-        var core = MarkdownWebView.CoreWebView2;
+        var core = ((IWebView2)sender!).CoreWebView2;
         core.Settings.AreDefaultScriptDialogsEnabled = false;
         core.Settings.AreHostObjectsAllowed = false;
         core.WebMessageReceived += MarkdownWebView_WebMessageReceived;
@@ -186,6 +206,7 @@ public partial class FileResourcePreviewControl : UserControl
 
     private void MarkdownWebView_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
+        if (!ReferenceEquals(sender, MarkdownBrowser)) { e.Cancel = true; return; }
         // NavigateToString reports its initial navigation as a data URI on some runtimes.
         if (markdownNavigationPending && !e.IsUserInitiated
             && (e.Uri == "about:blank" || e.Uri.StartsWith("data:text/html;", StringComparison.Ordinal)))
@@ -213,7 +234,8 @@ public partial class FileResourcePreviewControl : UserControl
 
     private async void MarkdownWebView_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (markdownEditorOpen || markdownDocumentId is null || MarkdownWebView.Visibility != Visibility.Visible
+        if (markdownEditorOpen || markdownDocumentId is null || MarkdownSurface.Visibility != Visibility.Visible
+            || !ReferenceEquals(sender, MarkdownBrowser.CoreWebView2)
             || (e.Source != "about:blank" && !e.Source.StartsWith("about:blank#", StringComparison.Ordinal))) return;
         try
         {
@@ -240,7 +262,7 @@ public partial class FileResourcePreviewControl : UserControl
                     PreviewTextBox.Text = file.Text;
                     DetailsBlock.Text = $"{Resource?.Content}\nTask saved to the original file.";
                 }
-                MarkdownWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+                MarkdownBrowser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
                 {
                     request.documentId, action = "toggleTask", success = error is null, error
                 }));
@@ -258,7 +280,7 @@ public partial class FileResourcePreviewControl : UserControl
             {
                 success = false;
             }
-            MarkdownWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            MarkdownBrowser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
             {
                 request.documentId, action = "copy", request.id, success
             }));

@@ -112,7 +112,9 @@
         </DataTemplate>
 
         <DataTemplate x:Key="FileResourceTemplate" DataType="{x:Type models:ResourceItem}">
-            <controls:FileResourcePreviewControl Resource="{Binding}" />
+            <controls:FileResourcePreviewControl
+                UseNativeMarkdownRenderer="{Binding UseNativeMarkdownRenderer, RelativeSource={RelativeSource AncestorType={x:Type controls:ResourceViewerControl}}}"
+                Resource="{Binding}" />
         </DataTemplate>
         <DataTemplate x:Key="VirtualFolderResourceTemplate" DataType="{x:Type models:ResourceItem}">
             <StackPanel Margin="16">

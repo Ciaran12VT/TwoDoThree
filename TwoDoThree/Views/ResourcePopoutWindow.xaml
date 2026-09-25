@@ -27,7 +27,8 @@
                 BorderThickness="1"
                 Background="#FFFFFF"
                 Padding="10">
-            <controls:ResourceViewerControl Resource="{Binding Resource, RelativeSource={RelativeSource AncestorType=Window}}" />
+            <controls:ResourceViewerControl UseNativeMarkdownRenderer="True"
+                                            Resource="{Binding Resource, RelativeSource={RelativeSource AncestorType=Window}}" />
         </Border>
 
         <StackPanel Grid.Row="2"

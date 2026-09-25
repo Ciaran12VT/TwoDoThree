@@ -9,6 +9,15 @@ namespace TwoDoThree.Controls;
 
 public partial class ResourceViewerControl : UserControl
 {
+    public static readonly DependencyProperty UseNativeMarkdownRendererProperty = DependencyProperty.Register(
+        nameof(UseNativeMarkdownRenderer), typeof(bool), typeof(ResourceViewerControl), new PropertyMetadata(false));
+
+    public bool UseNativeMarkdownRenderer
+    {
+        get => (bool)GetValue(UseNativeMarkdownRendererProperty);
+        set => SetValue(UseNativeMarkdownRendererProperty, value);
+    }
+
     public static readonly DependencyProperty ResourceProperty =
         DependencyProperty.Register(
             nameof(Resource),
